@@ -1,24 +1,11 @@
-// Этот модуль отвечает за все коммуникации с нашим Node.js сервером.
-
-/**
- * Загружает все данные приложения с сервера.
- * @returns {Promise<object>} - Промис с данными приложения.
- */
 export function loadAppData() {
     return fetch('/api/appdata', { method: 'POST' })
         .then(response => {
-            if (!response.ok) {
-                throw new Error('Network response was not ok');
-            }
+            if (!response.ok) throw new Error('Network response was not ok');
             return response.json();
         });
 }
 
-/**
- * Сохраняет изменения в задаче на сервере.
- * @param {object} taskData - Объект с данными задачи для обновления.
- * @returns {Promise<object>}
- */
 export function saveTask(taskData) {
     return fetch('/api/updatetask', {
         method: 'POST',
@@ -26,9 +13,20 @@ export function saveTask(taskData) {
         body: JSON.stringify(taskData)
     })
     .then(response => {
-        if (!response.ok) {
-            throw new Error('Network response was not ok');
-        }
+        if (!response.ok) throw new Error('Network response was not ok');
         return response.json();
     });
+}
+
+/**
+ * НОВАЯ ФУНКЦИЯ: Отправляет данные о пользователе на сервер для логирования.
+ * @param {object} userData - Объект с данными пользователя от Telegram.
+ */
+export function logUserVisit(userData) {
+    // Мы не ждем ответа, просто отправляем "в пустоту"
+    fetch('/api/logvisit', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(userData)
+    }).catch(error => console.error('Failed to log visit:', error));
 }

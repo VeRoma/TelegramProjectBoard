@@ -1,5 +1,7 @@
+// Файл: public/js/state.js
 // Этот модуль хранит глобальное состояние приложения.
 
+// Переменные для хранения списков, загруженных с сервера.
 export let availableStatuses = [];
 export let availableEmployees = [];
 
