@@ -1,4 +1,4 @@
-require('dotenv').config();
+require('dotenv').config({ override: true });
 const express = require('express');
 const path = require('path');
 const { GoogleSpreadsheet } = require('google-spreadsheet');
@@ -8,17 +8,14 @@ const TelegramBot = require('node-telegram-bot-api');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// --- Проверка переменных ---
 if (!process.env.SPREADSHEET_ID || !process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL || !process.env.GOOGLE_PRIVATE_KEY || !process.env.BOT_TOKEN) {
     console.error('ОШИБКА: Одна или несколько переменных окружения не найдены в файле .env.');
     process.exit(1);
 }
 
-// --- Настройка ---
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
-// --- Middleware для логирования запросов ---
 app.use((req, res, next) => {
     console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
     if (Object.keys(req.body).length) {
@@ -35,20 +32,17 @@ const serviceAccountAuth = new JWT({
 const doc = new GoogleSpreadsheet(process.env.SPREADSHEET_ID, serviceAccountAuth);
 const bot = new TelegramBot(process.env.BOT_TOKEN);
 
-// --- Middleware для загрузки данных из Google Sheets ---
 const loadSheetData = async (req, res, next) => {
     try {
         await doc.loadInfo();
+        // Теперь загружаем только обязательный лист "Задачи"
         req.sheets = {
             tasks: doc.sheetsByTitle['Задачи'],
-            statuses: doc.sheetsByTitle['Статусы'],
-            employees: doc.sheetsByTitle['Сотрудники'],
-            logs: doc.sheetsByTitle['Logs']
         };
 
-        if (!req.sheets.tasks || !req.sheets.statuses || !req.sheets.employees) {
-            console.error('Один или несколько обязательных листов не найдены в таблице.');
-            return res.status(500).json({ error: 'Ошибка конфигурации сервера: не найдены необходимые листы в таблице.' });
+        if (!req.sheets.tasks) {
+            console.error('Обязательный лист "Задачи" не найден в таблице.');
+            return res.status(500).json({ error: 'Ошибка конфигурации сервера: не найден лист "Задачи".' });
         }
         next();
     } catch (error) {
@@ -59,96 +53,42 @@ const loadSheetData = async (req, res, next) => {
 
 // --- API Endpoints ---
 
-// Проверка пользователя и логирование
-app.post('/api/verifyuser', loadSheetData, async (req, res) => {
+// Эндпоинт теперь просто подтверждает, что пользователь пришел из Telegram
+app.post('/api/verifyuser', (req, res) => {
     const { user } = req.body;
     if (!user || !user.id) {
         return res.status(400).json({ error: 'User object is required' });
     }
-    try {
-        const { employees: employeeSheet, logs: logSheet } = req.sheets;
-        const rows = await employeeSheet.getRows();
-        
-        const userRow = rows.find(row => row.get('UserID') == user.id);
-
-        if (userRow) {
-            try {
-                if (logSheet) {
-                    await logSheet.addRow({
-                        Timestamp: new Date().toISOString(),
-                        UserID: user.id,
-                        Username: user.username || '',
-                        FirstName: user.first_name || '',
-                        LastName: user.last_name || ''
-                    });
-                } else {
-                    console.warn('Внимание: Лист "Logs" для логирования не найден в таблице.');
-                }
-            } catch (logError) {
-                console.error('Ошибка при записи в лог:', logError.message);
-            }
-            
-            const userName = userRow.get('Имя');
-            res.status(200).json({
-                status: 'authorized',
-                name: userName
-            });
-        }  else {
-            res.status(200).json({ status: 'unregistered' });
-        }
-    } catch (error) {
-        console.error('Ошибка верификации пользователя:', error);
-        res.status(500).json({ error: error.message });
-    }
+    // Просто возвращаем успешный статус. Вся логика теперь на фронте.
+    res.status(200).json({ status: 'authorized' });
 });
 
-// Запрос на регистрацию
-app.post('/api/requestregistration', loadSheetData, async (req, res) => {
-    const { name, userId } = req.body;
-    try {
-        const rows = await req.sheets.employees.getRows();
-        const owner = rows.find(row => row.get('Role') === 'owner');
 
-        if (owner && owner.get('UserID')) {
-            const ownerId = owner.get('UserID');
-            const message = `❗️ Запрос на регистрацию ❗️\n\nИмя: ${name}\nUserID:\n\`${userId}\`\n\nПожалуйста, добавьте этот UserID в таблицу для соответствующего сотрудника.`;
-            
-            await bot.sendMessage(ownerId, message, { parse_mode: 'Markdown' });
-            res.status(200).json({ status: 'request_sent' });
-        } else {
-            throw new Error('Владелец (owner) с UserID не найден в таблице.');
-        }
-    } catch (error) {
-        console.error('Ошибка отправки запроса на регистрацию:', error);
-        res.status(500).json({ error: error.message });
-    }
+// Этот эндпоинт временно не будет работать корректно, т.к. список сотрудников на фронте.
+app.post('/api/requestregistration', (req, res) => {
+    console.warn("Вызов /api/requestregistration. Эта функция требует доработки.");
+    res.status(501).json({ error: 'Функция временно не поддерживается' });
 });
 
-// Получение данных с учетом роли пользователя
+
+// Получение данных теперь возвращает только проекты/задачи
 app.post('/api/appdata', loadSheetData, async (req, res) => {
     try {
-        const { tasks: tasksSheet, statuses: statusSheet, employees: employeeSheet } = req.sheets;
-        const user = req.body.user;
-        if (!user || !user.id) {
-            return res.status(400).json({ error: 'User object is required' });
-        }
+        const { tasks: tasksSheet } = req.sheets;
+        const { user, userName, userRole } = req.body;
 
-        const employeeRows = await employeeSheet.getRows();
-        const currentUser = employeeRows.find(row => row.get('UserID') == user.id);
-
-        if (!currentUser) {
-            return res.status(404).json({ error: 'User not found' });
+        if (!user || !user.id || !userName || !userRole) {
+            return res.status(400).json({ error: 'User info is required' });
         }
 
         let projects = {};
-        const userRole = currentUser.get('Role');
+        const allTasksRows = await tasksSheet.getRows();
+        const allProjects = [...new Set(allTasksRows.map(r => r.get('Проект')).filter(Boolean))];
 
         if (userRole === 'user') {
-            const userName = currentUser.get('Имя');
-            if (userName && doc.sheetsByTitle[userName]) {
+            if (doc.sheetsByTitle[userName]) {
                 const userTasksSheet = doc.sheetsByTitle[userName];
                 const userTasksRows = await userTasksSheet.getRows();
-
                 projects[userName] = {
                     name: userName,
                     tasks: userTasksRows.map(row => ({
@@ -157,42 +97,39 @@ app.post('/api/appdata', loadSheetData, async (req, res) => {
                         responsible: row.get('Ответственный'),
                         message: row.get('Сообщение исполнителю'),
                         rowIndex: row.get('rowIndex'),
-                        version: row.get('Версия') || 0
+                        version: row.get('Версия') || 0,
+                        project: row.get('Проект'),
+                        приоритет: row.get('Приоритет') || 99 // Добавляем приоритет
                     }))
                 };
             } else {
                 console.warn(`Лист "${userName}" для пользователя ${user.id} не найден.`);
             }
-        } else {
-            const tasksRows = await tasksSheet.getRows();
-            tasksRows.forEach((row, index) => {
+        } else { // admin, owner, etc.
+            allTasksRows.forEach((row, index) => {
                 const projectName = row.get('Проект');
                 if (!projectName) return;
                 if (!projects[projectName]) {
                     projects[projectName] = { name: projectName, tasks: [] };
                 }
                 projects[projectName].tasks.push({
-                    name: row.get('Наименование'),
-                    status: row.get('Статус'),
-                    responsible: row.get('Ответственный'),
-                    message: row.get('Сообщение исполнителю'),
-                    version: row.get('Версия') || 0,
-                    rowIndex: index + 2
+                    name: row.get('Наименование'), status: row.get('Статус'),
+                    responsible: row.get('Ответственный'), message: row.get('Сообщение исполнителю'),
+                    version: row.get('Версия') || 0, rowIndex: index + 2,
+                    project: projectName,
+                    приоритет: row.get('Приоритет') || 99 // Добавляем приоритет
                 });
             });
         }
         
-        const statuses = (await statusSheet.getRows()).map(row => row.get('Статус'));
-        const employees = (await employeeSheet.getRows()).map(row => row.get('Имя'));
-
-        res.status(200).json({ projects: Object.values(projects), statuses, employees });
+        res.status(200).json({ projects: Object.values(projects), allProjects });
     } catch (error) {
         console.error('Ошибка в /api/appdata:', error);
         res.status(500).json({ error: error.message });
     }
 });
 
-// Обновление задачи
+
 app.post('/api/updatetask', loadSheetData, async (req, res) => {
     try {
         const taskData = req.body;
@@ -221,7 +158,35 @@ app.post('/api/updatetask', loadSheetData, async (req, res) => {
     }
 });
 
-// Новый эндпоинт для логирования с фронтенда
+app.post('/api/updatepriorities', loadSheetData, async (req, res) => {
+    try {
+        const { tasks: updatedTasks } = req.body;
+        if (!updatedTasks || !Array.isArray(updatedTasks)) {
+            return res.status(400).json({ error: 'Неверный формат данных' });
+        }
+
+        const tasksSheet = req.sheets.tasks;
+        await tasksSheet.loadCells(); // Загружаем все ячейки для быстрого доступа
+
+        // Проходим по каждой задаче из запроса и обновляем ячейку с приоритетом
+        for (const task of updatedTasks) {
+            // Находим нужную ячейку. 'D' - это пример, замените на букву вашей колонки "Приоритет"
+            // Если у вас нет такой колонки, её нужно создать.
+            const priorityCell = tasksSheet.getCellByA1(`D${task.rowIndex}`); 
+            priorityCell.value = task.приоритет;
+        }
+
+        // Сохраняем все измененные ячейки одним запросом
+        await tasksSheet.saveUpdatedCells();
+        
+        res.status(200).json({ status: 'success' });
+
+    } catch (error) {
+        console.error('!!! ОШИБКА в /api/updatepriorities:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
 app.post('/api/log', (req, res) => {
     const { level = 'INFO', message, context } = req.body;
     console.log(`[CLIENT ${level}] ${message}`, context || '');
@@ -230,4 +195,14 @@ app.post('/api/log', (req, res) => {
 
 app.listen(PORT, () => {
     console.log(`Сервер запущен на порту ${PORT}`);
+});
+
+// --- Middleware для логирования запросов ---
+app.use((req, res, next) => {
+    console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
+    // This check prevents the crash on GET requests
+    if (req.body && Object.keys(req.body).length) {
+        console.log('  Данные запроса:', req.body);
+    }
+    next();
 });
