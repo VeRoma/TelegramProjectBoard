@@ -1,4 +1,5 @@
 import * as state from './state.js';
+
 const mainContainer = document.getElementById('main-content');
 const appHeader = document.getElementById('app-header');
 const toast = document.getElementById('toast-notification');
@@ -25,24 +26,59 @@ export function showToast(message) {
     }, 2500);
 }
 
-export function renderProjects(projects) {
+export function renderProjects(projects, userName) {
     appHeader.classList.add('hidden-header');
     mainContainer.innerHTML = '<div id="projects-container" class="space-y-4"></div>';
     const projectsContainer = document.getElementById('projects-container');
+
     if (!projects || projects.length === 0) {
         mainContainer.innerHTML = `<div class="p-4 rounded-lg text-center" style="background-color: var(--tg-theme-secondary-bg-color);">Проекты не найдены.</div>`;
         return;
     }
-    projects.forEach(project => {
-        const projectCard = document.createElement('div');
-        projectCard.className = 'card rounded-xl shadow-md overflow-hidden';
-        let tasksHtml = project.tasks.map(task => {
+
+    // Определяем, это вид для обычного пользователя или для админа
+    const isUserView = projects.length === 1 && projects[0].name === userName;
+
+    if (isUserView) {
+        // ЛОГИКА ДЛЯ USER: плоский список задач
+        const userTasks = projects[0].tasks;
+        if (!userTasks || userTasks.length === 0) {
+            mainContainer.innerHTML = `<div class="p-4 rounded-lg text-center" style="background-color: var(--tg-theme-secondary-bg-color);">Задачи не найдены.</div>`;
+            return;
+        }
+
+        // Каждая задача — это отдельная карточка
+        const tasksHtml = userTasks.map(task => {
             const taskDataString = JSON.stringify(task).replace(/'/g, '&apos;');
-            return `<div class="task-container border-t" style="border-color: var(--tg-theme-hint-color);"><div class="task-header p-4 cursor-pointer"><p class="font-medium pointer-events-none">${task.name}</p><p class="text-xs pointer-events-none" style="color: var(--tg-theme-hint-color);">${task.status}</p></div><div class="task-details collapsible-content px-4 pb-4" data-task='${taskDataString}'></div></div>`;
+            return `<div class="card rounded-xl shadow-md overflow-hidden">
+                        <div class="task-header p-4 cursor-pointer">
+                            <p class="font-medium pointer-events-none">${task.name}</p>
+                            <p class="text-xs pointer-events-none" style="color: var(--tg-theme-hint-color);">${task.status}</p>
+                        </div>
+                        <div id="task-details-${task.rowIndex}" class="task-details collapsible-content px-4 pb-4" data-task='${taskDataString}'></div>
+                    </div>`;
         }).join('');
-        projectCard.innerHTML = `<div class="project-header p-4 cursor-pointer"><h2 class="font-bold text-lg pointer-events-none">${project.name}</h2><p class="text-sm mt-1 pointer-events-none" style="color: var(--tg-theme-hint-color);">${project.tasks.length} задач(и)</p></div><div class="tasks-list collapsible-content">${tasksHtml}</div>`;
-        projectsContainer.appendChild(projectCard);
-    });
+        projectsContainer.innerHTML = tasksHtml;
+
+    } else {
+        // ЛОГИКА ДЛЯ ADMIN/OWNER: проекты (старая логика)
+        projects.forEach(project => {
+            const projectCard = document.createElement('div');
+            projectCard.className = 'card rounded-xl shadow-md overflow-hidden';
+            let tasksHtml = project.tasks.map(task => {
+                const taskDataString = JSON.stringify(task).replace(/'/g, '&apos;');
+                return `<div class="task-container border-t" style="border-color: var(--tg-theme-hint-color);">
+                            <div class="task-header p-4 cursor-pointer">
+                                <p class="font-medium pointer-events-none">${task.name}</p>
+                                <p class="text-xs pointer-events-none" style="color: var(--tg-theme-hint-color);">${task.status}</p>
+                            </div>
+                            <div id="task-details-${task.rowIndex}" class="task-details collapsible-content px-4 pb-4" data-task='${taskDataString}'></div>
+                        </div>`;
+            }).join('');
+            projectCard.innerHTML = `<div class="project-header p-4 cursor-pointer"><h2 class="font-bold text-lg pointer-events-none">${project.name}</h2><p class="text-sm mt-1 pointer-events-none" style="color: var(--tg-theme-hint-color);">${project.tasks.length} задач(и)</p></div><div class="tasks-list collapsible-content expanded">${tasksHtml}</div>`;
+            projectsContainer.appendChild(projectCard);
+        });
+    }
 }
 
 export function renderTaskDetails(detailsContainer) {
@@ -140,12 +176,13 @@ export function showRegistrationModal() {
     document.getElementById('registration-modal').classList.add('active');
 }
 
-export function setupUserInfo() {
+export function setupUserInfo(nameFromSheet) {
     const greetingElement = document.getElementById('greeting-text');
     const userIdElement = document.getElementById('user-id-text');
     const user = window.Telegram.WebApp.initDataUnsafe.user;
     if (user && user.id) {
-        greetingElement.textContent = `Привет, ${user.first_name || 'пользователь'}!`;
+        const displayName = nameFromSheet || user.first_name || 'пользователь';
+        greetingElement.textContent = `Привет, ${displayName}!`;
         userIdElement.textContent = `Ваш ID: ${user.id}`;
     }
 }

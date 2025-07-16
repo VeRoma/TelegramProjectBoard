@@ -1,5 +1,9 @@
-export function loadAppData() {
-    return fetch('/api/appdata', { method: 'POST' }).then(res => res.json());
+export function loadAppData(user) {
+    return fetch('/api/appdata', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ user })
+    }).then(res => res.json());
 }
 export function saveTask(taskData) {
     return fetch('/api/updatetask', {
@@ -21,4 +25,17 @@ export function requestRegistration(name, userId) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name, userId })
     }).then(res => res.json());
+}
+
+// Новая функция для логирования действий на сервере
+export function logAction(message, context = {}) {
+    fetch('/api/log', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            level: context.level || 'INFO',
+            message,
+            context
+        })
+    }).catch(error => console.error('Failed to log action:', error)); // Логируем ошибку логирования локально
 }
