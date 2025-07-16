@@ -1,4 +1,3 @@
-// Файл: public/js/main.js (изменения в setupUserInfo)
 import * as api from './api.js';
 import * as ui from './ui.js';
 import * as state from './state.js';
@@ -9,43 +8,149 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const mainContainer = document.getElementById('main-content');
     
-    function setupUserInfo() {
-        const greetingElement = document.getElementById('greeting-text');
-        const user = tg.initDataUnsafe.user;
+    async function handleSaveActiveTask() {
+        const activeEditElement = document.querySelector('.task-details.edit-mode');
+        if (!activeEditElement) return;
 
-        if (user && user.id) {
-            greetingElement.textContent = `Привет, ${user.first_name || 'пользователь'}!`;
-            // --- НОВОЕ: Отправляем данные для логирования ---
-            api.logUserVisit(user);
-        } else {
-            greetingElement.textContent = 'Добро пожаловать!';
+        const responsibleText = activeEditElement.querySelector('.task-responsible-view').textContent;
+        const selectedEmployees = responsibleText ? responsibleText.split(',').map(s => s.trim()).filter(Boolean) : [];
+        
+        const updatedTask = {
+            rowIndex: activeEditElement.querySelector('.task-row-index').value,
+            name: activeEditElement.querySelector('.task-name-edit').value,
+            message: activeEditElement.querySelector('.task-message-edit').value,
+            status: activeEditElement.querySelector('.task-status-view').textContent,
+            responsible: selectedEmployees,
+        };
+
+        try {
+            const result = await api.saveTask(updatedTask);
+            if (result.status === 'success') {
+                ui.showToast('Изменения сохранены');
+                tg.HapticFeedback.notificationOccurred('success');
+                activeEditElement.classList.remove('edit-mode');
+                ui.updateFabButtonUI(false, handleSaveActiveTask, handleRefresh);
+                const oldTaskData = JSON.parse(activeEditElement.dataset.task);
+                const newTaskData = {...oldTaskData, ...updatedTask, responsible: selectedEmployees.join(', ')};
+                activeEditElement.dataset.task = JSON.stringify(newTaskData).replace(/'/g, '&apos;');
+            } else {
+                tg.showAlert('Ошибка сохранения: ' + (result.error || 'Неизвестная ошибка'));
+            }
+        } catch (error) {
+            tg.showAlert('Критическая ошибка сохранения: ' + error.message);
         }
     }
 
-    async function handleSaveActiveTask() {
-        // ... (код без изменений)
-    }
-
     async function handleRefresh() {
-        // ... (код без изменений)
+        await handleSaveActiveTask();
+        initializeApp();
     }
 
     mainContainer.addEventListener('click', async (event) => {
-        // ... (код без изменений)
+        const projectHeader = event.target.closest('.project-header');
+        if (projectHeader) {
+            await handleSaveActiveTask();
+            const targetList = projectHeader.nextElementSibling;
+            const currentlyExpanded = document.querySelector('.tasks-list.expanded');
+            if (currentlyExpanded && currentlyExpanded !== targetList) {
+                currentlyExpanded.classList.remove('expanded');
+            }
+            targetList.classList.toggle('expanded');
+            if (targetList.classList.contains('expanded')) {
+                setTimeout(() => projectHeader.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50);
+            }
+            return;
+        }
+
+        const taskHeader = event.target.closest('.task-header');
+        if (taskHeader) {
+            await handleSaveActiveTask();
+            const detailsContainer = taskHeader.nextElementSibling;
+            if (!detailsContainer.innerHTML) {
+                ui.renderTaskDetails(detailsContainer);
+            }
+            detailsContainer.classList.toggle('expanded');
+            return;
+        }
+
+        const editBtn = event.target.closest('.edit-btn');
+        if (editBtn) {
+            const detailsContainer = editBtn.closest('.task-details');
+            const currentlyEditing = document.querySelector('.task-details.edit-mode');
+            if (currentlyEditing && currentlyEditing !== detailsContainer) {
+                await handleSaveActiveTask();
+            }
+            const isInEditMode = detailsContainer.classList.toggle('edit-mode');
+            ui.updateFabButtonUI(isInEditMode, handleSaveActiveTask, handleRefresh);
+            return;
+        }
+        
+        const modalTrigger = event.target.closest('.modal-trigger-field');
+        if (modalTrigger) {
+            const modalType = modalTrigger.dataset.modalType;
+            const activeTaskDetailsElement = modalTrigger.closest('.task-details');
+            
+            if (modalType === 'status') {
+                ui.openStatusModal(activeTaskDetailsElement);
+            } else if (modalType === 'employee') {
+                ui.openEmployeeModal(activeTaskDetailsElement);
+            }
+            return;
+        }
+    });
+
+    document.getElementById('register-btn').addEventListener('click', async () => {
+        const nameInput = document.getElementById('name-input');
+        const name = nameInput.value.trim();
+        const user = tg.initDataUnsafe.user;
+
+        if (!name) {
+            tg.showAlert('Пожалуйста, введите ваше имя.');
+            return;
+        }
+
+        try {
+            const result = await api.requestRegistration(name, user.id);
+            if (result.status === 'request_sent') {
+                document.getElementById('registration-modal').classList.remove('active');
+                tg.showAlert('Ваш запрос на регистрацию отправлен администратору. Вы получите уведомление после одобрения.');
+                tg.close();
+            } else {
+                throw new Error(result.error || 'Неизвестная ошибка');
+            }
+        } catch(error) {
+            tg.showAlert('Ошибка отправки запроса: ' + error.message);
+        }
     });
 
     async function initializeApp() {
-        setupUserInfo();
-        ui.showLoading();
+        const user = tg.initDataUnsafe.user;
+
+        if (!user || !user.id) {
+            ui.showAccessDeniedScreen();
+            return;
+        }
+
         try {
-            const data = await api.loadAppData();
-            state.setInitialData(data);
-            ui.renderProjects(data.projects);
+            ui.showLoading();
+            const verification = await api.verifyUser(user);
+
+            if (verification.status === 'authorized') {
+                document.getElementById('app').classList.remove('hidden');
+                ui.setupUserInfo();
+                const data = await api.loadAppData();
+                state.setInitialData(data);
+                ui.renderProjects(data.projects);
+            } else if (verification.status === 'unregistered') {
+                ui.showRegistrationModal();
+            } else {
+                throw new Error(verification.error || 'Неизвестный статус верификации');
+            }
         } catch (error) {
             ui.showDataLoadError(error);
         }
     }
-
+    
     ui.setupModals();
     ui.updateFabButtonUI(false, handleSaveActiveTask, handleRefresh);
     initializeApp();

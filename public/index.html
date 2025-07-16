@@ -5,42 +5,53 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <title>Проектная доска</title>
-
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
-
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-
-    <!-- Подключение нашего файла стилей -->
     <link rel="stylesheet" href="/css/styles.css">
 </head>
 
 <body class="antialiased overflow-x-hidden">
-
-    <div id="app" class="min-h-screen">
+    <div id="auth-blocker" class="hidden min-h-screen flex items-center justify-center text-center p-4">
+        <div>
+            <h1 class="text-2xl font-bold">Доступ ограничен</h1>
+            <p class="mt-2 text-gray-600">Пожалуйста, используйте бота в Telegram для доступа к приложению.</p>
+        </div>
+    </div>
+    <div id="app" class="min-h-screen hidden">
         <header id="app-header" class="header p-4 shadow-sm sticky top-0 z-10">
             <h1 class="text-xl font-bold">Мои проекты</h1>
-            <!-- Осталось только приветствие -->
-            <p id="greeting-text" class="text-sm">Загрузка...</p>
+            <p id="greeting-text" class="text-sm"></p>
+            <p id="user-id-text" class="text-xs mt-1" style="color: var(--tg-theme-hint-color, #999999);"></p>
         </header>
         <main id="main-content" class="p-4 space-y-4"></main>
     </div>
-
     <div id="fab-button"
         class="fixed bottom-6 right-6 w-14 h-14 flex items-center justify-center rounded-full shadow-lg cursor-pointer z-20">
         <div id="fab-icon-container"></div>
     </div>
+    <div id="registration-modal" class="modal">
+        <div class="modal-content">
+            <div class="p-4 border-b">
+                <h3 class="text-lg font-bold">Регистрация</h3>
+            </div>
+            <div class="modal-body space-y-4">
+                <p>Ваш аккаунт не зарегистрирован в системе. Пожалуйста, введите Ваше имя, чтобы отправить
+                    запрос администратору.</p>
+                <div>
 
+                    <input type="text" id="name-input" class="details-input mt-1" placeholder="Ваше имя">
+                </div>
+            </div>
+            <div class="p-2 border-t flex justify-end">
+                <button id="register-btn" class="modal-select-btn px-4 py-2 rounded-lg">Запросить доступ</button>
+            </div>
+        </div>
+    </div>
     <div id="status-modal" class="modal"></div>
     <div id="employee-modal" class="modal"></div>
-
     <div id="toast-notification"
         class="fixed bottom-[-100px] left-1/2 -translate-x-1/2 bg-gray-800 text-white px-6 py-3 rounded-full shadow-lg z-50">
     </div>
-
-    <!-- Подключение нашего основного скрипта как модуля -->
     <script type="module" src="/js/main.js"></script>
 </body>
 

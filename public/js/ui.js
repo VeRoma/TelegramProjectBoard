@@ -1,8 +1,4 @@
-// Файл: public/js/ui.js
-// Этот модуль отвечает за все манипуляции с DOM и отображение данных.
 import * as state from './state.js';
-
-// --- Элементы DOM ---
 const mainContainer = document.getElementById('main-content');
 const appHeader = document.getElementById('app-header');
 const toast = document.getElementById('toast-notification');
@@ -11,7 +7,6 @@ const fabIconContainer = document.getElementById('fab-icon-container');
 const statusModal = document.getElementById('status-modal');
 const employeeModal = document.getElementById('employee-modal');
 
-// --- Константы ---
 const ICONS = {
     refresh: `<svg class="h-7 w-7" fill="none" viewBox="0 0 24 24" stroke="var(--tg-theme-button-text-color, #ffffff)" stroke-width="2"><path d="M21 12a9 9 0 1 1-6.219-8.56" stroke-linecap="round" stroke-linejoin="round"></path></svg>`,
     save: `<svg class="h-7 w-7" fill="none" viewBox="0 0 24 24" stroke="var(--tg-theme-button-text-color, #ffffff)" stroke-width="2"><path d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" stroke-linecap="round" stroke-linejoin="round"></path></svg>`
@@ -19,12 +14,6 @@ const ICONS = {
 
 let saveTimeout;
 
-// --- Функции для управления интерфейсом ---
-
-/**
- * Показывает всплывающее уведомление (тост) внизу экрана.
- * @param {string} message - Текст уведомления.
- */
 export function showToast(message) {
     toast.textContent = message;
     toast.style.bottom = '1.5rem';
@@ -36,10 +25,6 @@ export function showToast(message) {
     }, 2500);
 }
 
-/**
- * Отрисовывает список проектов на главной странице.
- * @param {Array} projects - Массив объектов проектов.
- */
 export function renderProjects(projects) {
     appHeader.classList.add('hidden-header');
     mainContainer.innerHTML = '<div id="projects-container" class="space-y-4"></div>';
@@ -60,10 +45,6 @@ export function renderProjects(projects) {
     });
 }
 
-/**
- * Отрисовывает детали конкретной задачи при первом клике.
- * @param {HTMLElement} detailsContainer - DOM-элемент, куда будут вставлены детали.
- */
 export function renderTaskDetails(detailsContainer) {
     const task = JSON.parse(detailsContainer.dataset.task);
     detailsContainer.innerHTML = `
@@ -86,10 +67,6 @@ export function renderTaskDetails(detailsContainer) {
         </div>`;
 }
 
-/**
- * Открывает модальное окно для выбора статуса.
- * @param {HTMLElement} activeTaskDetailsElement - Элемент задачи, для которой открывается модальное окно.
- */
 export function openStatusModal(activeTaskDetailsElement) {
     const currentStatus = activeTaskDetailsElement.querySelector('.task-status-view').textContent;
     statusModal.innerHTML = `<div class="modal-content"><div class="p-4 border-b" style="border-color: var(--tg-theme-hint-color);"><h3 class="text-lg font-bold">Выберите статус</h3></div><div class="modal-body">${state.availableStatuses.map(s => `<label class="flex items-center space-x-3 p-3 rounded-md hover:bg-gray-200"><input type="radio" name="status" value="${s}" ${s === currentStatus ? 'checked' : ''} class="w-4 h-4"><span>${s}</span></label>`).join('')}</div><div class="p-2 border-t flex justify-end" style="border-color: var(--tg-theme-hint-color);"><button class="modal-select-btn px-4 py-2 rounded-lg">Выбрать</button></div></div>`;
@@ -97,10 +74,6 @@ export function openStatusModal(activeTaskDetailsElement) {
     statusModal.dataset.targetElement = `#${activeTaskDetailsElement.id || (activeTaskDetailsElement.id = `task-${Date.now()}`)}`;
 }
 
-/**
- * Открывает модальное окно для выбора сотрудников.
- * @param {HTMLElement} activeTaskDetailsElement - Элемент задачи, для которой открывается модальное окно.
- */
 export function openEmployeeModal(activeTaskDetailsElement) {
     const currentResponsible = activeTaskDetailsElement.querySelector('.task-responsible-view').textContent.split(',').map(n => n.trim());
     employeeModal.innerHTML = `<div class="modal-content"><div class="p-4 border-b" style="border-color: var(--tg-theme-hint-color);"><h3 class="text-lg font-bold">Выберите ответственных</h3></div><div class="modal-body modal-body-employee">${state.availableEmployees.map(e => `<label class="flex items-center space-x-3 p-3 rounded-md hover:bg-gray-200"><input type="checkbox" value="${e}" ${currentResponsible.includes(e) ? 'checked' : ''} class="employee-checkbox w-4 h-4 rounded"><span>${e}</span></label>`).join('')}</div><div class="p-2 border-t flex justify-end" style="border-color: var(--tg-theme-hint-color);"><button class="modal-select-btn px-4 py-2 rounded-lg">Выбрать</button></div></div>`;
@@ -108,9 +81,6 @@ export function openEmployeeModal(activeTaskDetailsElement) {
     employeeModal.dataset.targetElement = `#${activeTaskDetailsElement.id || (activeTaskDetailsElement.id = `task-${Date.now()}`)}`;
 }
 
-/**
- * Настраивает обработчики событий для модальных окон.
- */
 export function setupModals() {
     [statusModal, employeeModal].forEach(modal => {
         modal.addEventListener('click', (e) => {
@@ -135,29 +105,16 @@ export function setupModals() {
     });
 }
 
-/**
- * Показывает индикатор загрузки.
- */
 export function showLoading() {
-    document.getElementById('greeting-text').textContent = 'Синхронизация...';
+    document.getElementById('app').classList.remove('hidden');
     mainContainer.innerHTML = '<div class="text-center py-10"><div class="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-500 mx-auto mt-4"></div></div>';
 }
 
-/**
- * Показывает сообщение об ошибке загрузки данных.
- * @param {Error|string} error - Объект ошибки или текст.
- */
 export function showDataLoadError(error) {
     const errorMessage = typeof error === 'object' ? error.message : String(error);
     mainContainer.innerHTML = `<div class="p-4 bg-red-100 text-red-700 rounded-lg"><p class="font-bold">Ошибка загрузки</p><p class="text-sm mt-1">${errorMessage}</p></div>`;
 }
 
-/**
- * Обновляет вид и функцию плавающей кнопки (FAB).
- * @param {boolean} isEditMode - Находится ли приложение в режиме редактирования.
- * @param {Function} saveHandler - Обработчик для сохранения.
- * @param {Function} refreshHandler - Обработчик для обновления.
- */
 export function updateFabButtonUI(isEditMode, saveHandler, refreshHandler) {
     const currentHandler = fabButton.onclick;
     if (currentHandler) {
@@ -170,5 +127,25 @@ export function updateFabButtonUI(isEditMode, saveHandler, refreshHandler) {
     } else {
         fabIconContainer.innerHTML = ICONS.refresh;
         fabButton.onclick = refreshHandler;
+    }
+}
+
+export function showAccessDeniedScreen() {
+    document.getElementById('app').classList.add('hidden');
+    document.getElementById('auth-blocker').classList.remove('hidden');
+}
+
+export function showRegistrationModal() {
+    document.getElementById('app').classList.add('hidden');
+    document.getElementById('registration-modal').classList.add('active');
+}
+
+export function setupUserInfo() {
+    const greetingElement = document.getElementById('greeting-text');
+    const userIdElement = document.getElementById('user-id-text');
+    const user = window.Telegram.WebApp.initDataUnsafe.user;
+    if (user && user.id) {
+        greetingElement.textContent = `Привет, ${user.first_name || 'пользователь'}!`;
+        userIdElement.textContent = `Ваш ID: ${user.id}`;
     }
 }
