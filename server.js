@@ -16,9 +16,10 @@ if (!process.env.SPREADSHEET_ID || !process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL || 
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
+// Единый, исправленный логгер
 app.use((req, res, next) => {
     console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
-    if (Object.keys(req.body).length) {
+    if (req.body && Object.keys(req.body).length) {
         console.log('  Данные запроса:', req.body);
     }
     next();
@@ -35,7 +36,6 @@ const bot = new TelegramBot(process.env.BOT_TOKEN);
 const loadSheetData = async (req, res, next) => {
     try {
         await doc.loadInfo();
-        // Теперь загружаем только обязательный лист "Задачи"
         req.sheets = {
             tasks: doc.sheetsByTitle['Задачи'],
         };
@@ -53,25 +53,18 @@ const loadSheetData = async (req, res, next) => {
 
 // --- API Endpoints ---
 
-// Эндпоинт теперь просто подтверждает, что пользователь пришел из Telegram
 app.post('/api/verifyuser', (req, res) => {
     const { user } = req.body;
     if (!user || !user.id) {
         return res.status(400).json({ error: 'User object is required' });
     }
-    // Просто возвращаем успешный статус. Вся логика теперь на фронте.
     res.status(200).json({ status: 'authorized' });
 });
 
-
-// Этот эндпоинт временно не будет работать корректно, т.к. список сотрудников на фронте.
 app.post('/api/requestregistration', (req, res) => {
     console.warn("Вызов /api/requestregistration. Эта функция требует доработки.");
     res.status(501).json({ error: 'Функция временно не поддерживается' });
 });
-
-
-// Получение данных теперь возвращает только проекты/задачи
 
 app.post('/api/appdata', loadSheetData, async (req, res) => {
     try {
@@ -83,9 +76,7 @@ app.post('/api/appdata', loadSheetData, async (req, res) => {
         }
 
         let projects = {};
-        // Получаем все строки один раз
         const allTasksRows = await tasksSheet.getRows();
-        // ▼▼▼ Фильтруем пустые задачи сразу ▼▼▼
         const validTasksRows = allTasksRows.filter(row => row.get('Наименование'));
 
         const allProjects = [...new Set(validTasksRows.map(r => r.get('Проект')).filter(Boolean))];
@@ -93,7 +84,6 @@ app.post('/api/appdata', loadSheetData, async (req, res) => {
         if (userRole === 'user') {
             if (doc.sheetsByTitle[userName]) {
                 const userTasksSheet = doc.sheetsByTitle[userName];
-                // Получаем строки и сразу фильтруем их
                 const userTasksRows = (await userTasksSheet.getRows()).filter(row => row.get('Наименование'));
 
                 projects[userName] = {
@@ -113,8 +103,7 @@ app.post('/api/appdata', loadSheetData, async (req, res) => {
                 console.warn(`Лист "${userName}" для пользователя ${user.id} не найден.`);
             }
         } else { // admin, owner, etc.
-            // Используем уже отфильтрованный массив validTasksRows
-            validTasksRows.forEach((row, index) => {
+            validTasksRows.forEach((row) => {
                 const projectName = row.get('Проект');
                 if (!projectName) return;
                 if (!projects[projectName]) {
@@ -123,7 +112,7 @@ app.post('/api/appdata', loadSheetData, async (req, res) => {
                 projects[projectName].tasks.push({
                     name: row.get('Наименование'), status: row.get('Статус'),
                     responsible: row.get('Ответственный'), message: row.get('Сообщение исполнителю'),
-                    version: row.get('Версия') || 0, rowIndex: row.get('rowIndex'), // Используем rowIndex из таблицы
+                    version: row.get('Версия') || 0, rowIndex: row.get('rowIndex'),
                     project: projectName,
                     приоритет: row.get('Приоритет') || 99
                 });
@@ -142,19 +131,24 @@ app.post('/api/updatetask', loadSheetData, async (req, res) => {
         const taskData = req.body;
         const rows = await req.sheets.tasks.getRows();
         
-        const rowToUpdate = rows[taskData.rowIndex - 2];
+        const rowToUpdate = rows.find(row => row.get('rowIndex') == taskData.rowIndex);
         if (!rowToUpdate) {
             return res.status(404).json({ error: 'Задача не найдена' });
         }
 
         const currentVersion = rowToUpdate.get('Версия') || 0;
-        if (taskData.version !== currentVersion) {
-            return res.status(409).json({ error: 'Данные были изменены другим пользователем. Пожалуйста, обновите страницу.' });
-        }
-
+        
+        // Обновляем только те поля, которые были изменены
         rowToUpdate.set('Наименование', taskData.name);
         rowToUpdate.set('Статус', taskData.status);
-        rowToUpdate.set('Ответственный', taskData.responsible.join(', '));
+        rowToUpdate.set('Проект', taskData.project);
+
+        if (Array.isArray(taskData.responsible)) {
+            rowToUpdate.set('Ответственный', taskData.responsible.join(', '));
+        } else {
+            rowToUpdate.set('Ответственный', taskData.responsible);
+        }
+
         rowToUpdate.set('Сообщение исполнителю', taskData.message);
         rowToUpdate.set('Версия', currentVersion + 1);
         await rowToUpdate.save();
@@ -173,21 +167,16 @@ app.post('/api/updatepriorities', loadSheetData, async (req, res) => {
         }
 
         const tasksSheet = req.sheets.tasks;
-        await tasksSheet.loadCells(); // Загружаем все ячейки для быстрого доступа
+        await tasksSheet.loadCells();
 
-        // Проходим по каждой задаче из запроса и обновляем ячейку с приоритетом
         for (const task of updatedTasks) {
-            // Находим нужную ячейку. 'D' - это пример, замените на букву вашей колонки "Приоритет"
-            // Если у вас нет такой колонки, её нужно создать.
-            const priorityCell = tasksSheet.getCellByA1(`D${task.rowIndex}`); 
+            // Замените 'I' на букву вашей колонки "Приоритет"
+            const priorityCell = tasksSheet.getCellByA1(`I${task.rowIndex}`); 
             priorityCell.value = task.приоритет;
         }
 
-        // Сохраняем все измененные ячейки одним запросом
         await tasksSheet.saveUpdatedCells();
-        
         res.status(200).json({ status: 'success' });
-
     } catch (error) {
         console.error('!!! ОШИБКА в /api/updatepriorities:', error);
         res.status(500).json({ error: error.message });
@@ -199,7 +188,6 @@ app.post('/api/addtask', loadSheetData, async (req, res) => {
         const newTaskData = req.body;
         const tasksSheet = req.sheets.tasks;
 
-        // 1. Добавляем новую строку
         const newRow = await tasksSheet.addRow({
             Наименование: newTaskData.name,
             Проект: newTaskData.project,
@@ -210,12 +198,10 @@ app.post('/api/addtask', loadSheetData, async (req, res) => {
             Версия: 0,
         });
 
-        // 2. Устанавливаем и сохраняем rowIndex
         const newRowIndex = newRow.rowNumber;
         newRow.set('rowIndex', newRowIndex);
         await newRow.save();
 
-        // 3. Отправляем уведомления (этот блок без изменений)
         if (newTaskData.responsibleUserIds && newTaskData.creatorId) {
             newTaskData.responsibleUserIds.forEach(userId => {
                 if (userId !== newTaskData.creatorId) {
@@ -227,8 +213,6 @@ app.post('/api/addtask', loadSheetData, async (req, res) => {
             });
         }
         
-        // ▼▼▼ НАЧАЛО ИЗМЕНЕНИЯ ▼▼▼
-        // 4. Формируем ответ с правильными ключами, которые ожидает фронтенд
         const responseTask = {
             name: newRow.get('Наименование'),
             project: newRow.get('Проект'),
@@ -240,10 +224,7 @@ app.post('/api/addtask', loadSheetData, async (req, res) => {
             rowIndex: newRow.get('rowIndex')
         };
 
-        // 5. Отправляем правильно сформированный объект
         res.status(200).json({ status: 'success', task: responseTask });
-        // ▲▲▲ КОНЕЦ ИЗМЕНЕНИЯ ▲▲▲
-
     } catch (error) {
         console.error('!!! ОШИБКА в /api/addtask:', error);
         res.status(500).json({ error: error.message });
@@ -259,4 +240,3 @@ app.post('/api/log', (req, res) => {
 app.listen(PORT, () => {
     console.log(`Сервер запущен на порту ${PORT}`);
 });
-

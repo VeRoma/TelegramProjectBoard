@@ -1,5 +1,6 @@
 html {
     scroll-behavior: smooth;
+    scrollbar-gutter: stable;
 }
 
 body {
@@ -116,6 +117,9 @@ body {
 
 #fab-button {
     background-color: var(--tg-theme-button-color, #40a7e3);
+    /* ... другие стили ... */
+    margin-right: 60px;
+    /* Сдвигаем кнопку влево */
 }
 
 .modal-select-btn {
@@ -147,3 +151,138 @@ body {
     border-top: 3px solid var(--tg-theme-button-color, #40a7e3) !important;
 }
 
+
+/* text-shadow: 2px 2px 3px rgba(0, 0, 0, 0.2); */
+
+/* animation: pulse-glow 5s infinite ease-in-out; */
+
+.task-status-checker {
+    width: 45px;
+    height: 45px;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.5rem;
+    font-weight: bold;
+    border-radius: 0.5rem;
+    border: 1px solid transparent;
+    /* Делаем рамку изначально прозрачной */
+    text-shadow: 2px 2px 2px rgba(0, 0, 0, 0.2);
+
+    transition: transform 0.15s ease-out, background-color 0.2s ease;
+}
+
+.task-status-checker:hover {
+    transform: scale(1.1);
+}
+
+.task-status-checker:active {
+    transform: scale(0.95);
+}
+
+/* --- Новая логика для фона в зависимости от темы --- */
+
+/* Для СВЕТЛОЙ темы фон будет чуть темнее фона карточки */
+body[style*="--tg-color-scheme: light"] .task-status-checker {
+    background-color: rgba(0, 0, 0, 0.05);
+}
+
+/* Для ТЁМНОЙ темы фон будет чуть светлее фона карточки */
+body[style*="--tg-color-scheme: dark"] .task-status-checker {
+    background-color: rgba(255, 255, 255, 0.1);
+}
+
+/* --- Цвета символов и рамок для каждого статуса --- */
+
+.task-status-checker[data-status="Выполнено"] {
+    color: #16a34a;
+    /* Зелёный */
+    border-color: #22c55e;
+}
+
+.task-status-checker[data-status="В работе"] {
+    animation: pulse-glow 5s infinite ease-in-out;
+    color: #2563eb;
+    /* Синий */
+    border-color: #60a5fa;
+    /* Убираем анимацию пульсации, чтобы не конфликтовать с новым фоном */
+    /* animation: pulse-glow 2.5s infinite ease-in-out; */
+}
+
+.task-status-checker[data-status="Отложено"] {
+    color: #ca8a04;
+    /* Жёлтый */
+    border-color: #facc15;
+}
+
+.task-status-checker[data-status="Отменено"] {
+    color: #64748b;
+    /* Серый */
+    border-color: #94a3b8;
+    text-decoration: line-through;
+}
+
+.task-status-checker[data-status="На контроле"] {
+    color: #7e22ce;
+    /* Фиолетовый */
+    border-color: #a855f7;
+}
+
+/* Задаём фиксированную высоту для заголовка карточки */
+.task-header {
+    height: 80px;
+    display: flex;
+    align-items: center;
+    /* Это свойство отвечает за вертикальное центрирование */
+    justify-content: space-between;
+    /* Разносит текст и иконку по краям */
+    gap: 12px;
+    /* Отступ между текстом и иконкой */
+    padding: 0 12px;
+    /* Внутренние отступы слева и справа */
+}
+
+/* Новый класс для ограничения текста двумя строками с многоточием */
+.line-clamp-2 {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    word-break: break-word;
+}
+
+/* Анимация пульсации тени */
+@keyframes pulse-glow {
+
+    0%,
+    100% {
+        box-shadow: 0 0 8px 0px rgba(59, 130, 246, 0);
+    }
+
+    50% {
+        box-shadow: 0 0 8px 4px rgba(59, 130, 246, 0.4);
+    }
+}
+
+.modal-content-compact {
+    width: auto;
+    min-width: 200px;
+    /* Минимальная ширина, чтобы не было слишком узко */
+}
+
+/* Добавляем плавность для анимации увеличения */
+.card,
+.task-container {
+    transition: transform 0.2s ease-out;
+}
+
+/* Применяем само увеличение при наведении */
+.card:hover,
+.task-container:hover {
+    transform: scale(1.02);
+    /* Увеличиваем на 2% */
+    z-index: 10;
+    /* Поднимаем карточку над остальными, чтобы тень была видна */
+}

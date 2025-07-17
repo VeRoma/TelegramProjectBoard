@@ -30,6 +30,17 @@ export function showToast(message) {
     }, 2500);
 }
 
+function getStatusSymbol(status) {
+    const symbols = {
+        'Выполнено': '✔',
+        'Отменено': '✖',
+        'В работе': '⚒',
+        'Отложено': '⏳',
+        'На контроле': '🔍'
+    };
+    return symbols[status] || '';
+}
+
 export function renderProjects(projects, userName) {
     appHeader.classList.add('hidden-header');
     mainContainer.innerHTML = '<div id="projects-container" class="space-y-4"></div>';
@@ -53,11 +64,15 @@ export function renderProjects(projects, userName) {
 
         const tasksHtml = userTasks.map(task => {
             const taskDataString = JSON.stringify(task).replace(/'/g, '&apos;');
-            // ▼▼▼ ДОБАВЛЯЕМ draggable="true" ▼▼▼
             return `<div class="card rounded-xl shadow-md overflow-hidden" draggable="true" data-task-id="${task.rowIndex}">
-                        <div class="task-header p-4 cursor-pointer select-none">
-                            <p class="font-medium pointer-events-none">${task.name}</p>
-                            <p class="text-xs pointer-events-none" style="color: var(--tg-theme-hint-color);">${task.project}</p>
+                        <div class="task-header p-3 flex justify-between items-center gap-3 cursor-pointer select-none">
+                            <div class="flex-grow min-w-0">
+                                <p class="text-xs pointer-events-none" style="color: var(--tg-theme-hint-color);">${task.project}</p>
+                                <p class="font-medium pointer-events-none line-clamp-2">${task.name}</p>
+                            </div>
+                            <div class="task-status-checker" data-status="${task.status}">
+                                ${getStatusSymbol(task.status)}
+                            </div>
                         </div>
                         <div id="task-details-${task.rowIndex}" class="task-details collapsible-content px-4 pb-4" data-task='${taskDataString}'></div>
                     </div>`;
@@ -73,11 +88,15 @@ export function renderProjects(projects, userName) {
             
             let tasksHtml = project.tasks.map(task => {
                 const taskDataString = JSON.stringify(task).replace(/'/g, '&apos;');
-                 // ▼▼▼ ДОБАВЛЯЕМ draggable="true" и ID ▼▼▼
                 return `<div class="task-container" draggable="true" data-task-id="${task.rowIndex}">
-                            <div class="task-header p-4 cursor-pointer select-none">
-                                <p class="font-medium pointer-events-none">${task.name}</p>
-                                <p class="text-xs pointer-events-none" style="color: var(--tg-theme-hint-color);">${task.project}</p>
+                            <div class="task-header p-3 flex justify-between items-center gap-3 cursor-pointer select-none">
+                                <div class="flex-grow min-w-0">
+                                    <p class="text-xs pointer-events-none" style="color: var(--tg-theme-hint-color);">${task.project}</p>
+                                    <p class="font-medium pointer-events-none line-clamp-2">${task.name}</p>
+                                </div>
+                                <div class="task-status-checker" data-status="${task.status}">
+                                    ${getStatusSymbol(task.status)}
+                                </div>
                             </div>
                             <div id="task-details-${task.rowIndex}" class="task-details collapsible-content px-4 pb-4" data-task='${taskDataString}'></div>
                         </div>`;
@@ -116,8 +135,19 @@ export function renderTaskDetails(detailsContainer) {
 
 export function openStatusModal(activeTaskDetailsElement) {
     document.body.classList.add('overflow-hidden');
-    const currentStatus = activeTaskDetailsElement.querySelector('.task-status-view').textContent;
-    statusModal.innerHTML = `<div class="modal-content"><div class="p-4 border-b" style="border-color: var(--tg-theme-hint-color);"><h3 class="text-lg font-bold">Выберите статус</h3></div><div class="modal-body">${statuses.map(s => `<label class="flex items-center space-x-3 p-3 rounded-md hover:bg-gray-200"><input type="radio" name="status" value="${s}" ${s === currentStatus ? 'checked' : ''} class="w-4 h-4"><span>${s}</span></label>`).join('')}</div><div class="p-2 border-t flex justify-end" style="border-color: var(--tg-theme-hint-color);"><button class="modal-select-btn px-4 py-2 rounded-lg">Выбрать</button></div></div>`;
+    
+    statusModal.innerHTML = `
+        <div class="modal-content modal-content-compact">
+            <div class="modal-body p-2">
+                ${statuses.map(s => `
+                    <div class="status-option flex items-center p-3 rounded-lg hover:bg-gray-200 cursor-pointer" data-status-value="${s}">
+                        <span class="text-2xl w-8 text-center">${getStatusSymbol(s)}</span>
+                        <span class="text-lg ml-3">${s}</span>
+                    </div>
+                `).join('')}
+            </div>
+        </div>`;
+        
     statusModal.classList.add('active');
     statusModal.dataset.targetElement = `#${activeTaskDetailsElement.id || (activeTaskDetailsElement.id = `task-${Date.now()}`)}`;
 }
@@ -125,10 +155,7 @@ export function openStatusModal(activeTaskDetailsElement) {
 export function openEmployeeModal(activeTaskDetailsElement) {
     document.body.classList.add('overflow-hidden');
     const currentResponsible = activeTaskDetailsElement.querySelector('.task-responsible-view').textContent.split(',').map(n => n.trim());
-    
-    // ▼▼▼ Фильтруем сотрудников, оставляя только тех, у кого role === 'user' ▼▼▼
     const userEmployees = employees.filter(e => e.role === 'user').map(e => e.name);
-    
     employeeModal.innerHTML = `<div class="modal-content"><div class="p-4 border-b" style="border-color: var(--tg-theme-hint-color);"><h3 class="text-lg font-bold">Выберите ответственных</h3></div><div class="modal-body modal-body-employee">${userEmployees.map(e => `<label class="flex items-center space-x-3 p-3 rounded-md hover:bg-gray-200"><input type="checkbox" value="${e}" ${currentResponsible.includes(e) ? 'checked' : ''} class="employee-checkbox w-4 h-4 rounded"><span>${e}</span></label>`).join('')}</div><div class="p-2 border-t flex justify-end" style="border-color: var(--tg-theme-hint-color);"><button class="modal-select-btn px-4 py-2 rounded-lg">Выбрать</button></div></div>`;
     employeeModal.classList.add('active');
     employeeModal.dataset.targetElement = `#${activeTaskDetailsElement.id || (activeTaskDetailsElement.id = `task-${Date.now()}`)}`;
@@ -142,18 +169,53 @@ export function openProjectModal(activeTaskDetailsElement, allProjects) {
     projectModal.dataset.targetElement = `#${activeTaskDetailsElement.id || (activeTaskDetailsElement.id = `task-${Date.now()}`)}`;
 }
 
-export function setupModals() {
+export function setupModals(onStatusChange) {
     [statusModal, employeeModal, projectModal, addTaskModal].forEach(modal => {
         modal.addEventListener('click', (e) => {
-            if (e.target === modal && !e.target.closest('#add-task-btn')) {
-                modal.classList.remove('active');
-                document.body.classList.remove('overflow-hidden'); // Разблокируем фон
-            }
-            if (e.target.closest('.modal-select-btn') && modal.id !== 'add-task-modal') {
-                // ... (существующий код) ...
+            if (modal.id === 'status-modal' && e.target.closest('.status-option')) {
+                const selectedOption = e.target.closest('.status-option');
+                const targetElement = document.querySelector(modal.dataset.targetElement);
+                if (!targetElement) return;
+
+                const rowIndex = targetElement.querySelector('.task-row-index').value;
+                const newStatus = selectedOption.dataset.statusValue;
+                
+                onStatusChange(rowIndex, newStatus);
+                
                 modal.classList.remove('active');
                 delete modal.dataset.targetElement;
-                document.body.classList.remove('overflow-hidden'); // Разблокируем фон
+                document.body.classList.remove('overflow-hidden');
+                return;
+            }
+
+            if (e.target === modal) {
+                if (modal.id === 'status-modal') {
+                    const targetElement = document.querySelector(modal.dataset.targetElement);
+                    if (targetElement && !targetElement.classList.contains('expanded')) {
+                        targetElement.innerHTML = '';
+                    }
+                }
+                modal.classList.remove('active');
+                document.body.classList.remove('overflow-hidden');
+            }
+            
+            if (e.target.closest('.modal-select-btn') && modal.id !== 'add-task-modal') {
+                const targetElement = document.querySelector(modal.dataset.targetElement);
+                if (!targetElement) return;
+
+                if (modal.id === 'employee-modal') {
+                    const selected = [...modal.querySelectorAll('.employee-checkbox:checked')].map(cb => cb.value);
+                    targetElement.querySelector('.task-responsible-view').textContent = selected.join(', ');
+                } else if (modal.id === 'project-modal') {
+                   const selected = modal.querySelector('input[name="project"]:checked');
+                    if (selected) {
+                        targetElement.querySelector('.task-project-view').textContent = selected.value;
+                    }
+                }
+                
+                modal.classList.remove('active');
+                delete modal.dataset.targetElement;
+                document.body.classList.remove('overflow-hidden');
             }
         });
     });
@@ -169,7 +231,7 @@ export function showDataLoadError(error) {
     mainContainer.innerHTML = `<div class="p-4 bg-red-100 text-red-700 rounded-lg"><p class="font-bold">Ошибка загрузки</p><p class="text-sm mt-1">${errorMessage}</p></div>`;
 }
 
-export function updateFabButtonUI(isEditMode, saveHandler, addHandler) { // refreshHandler заменен на addHandler
+export function updateFabButtonUI(isEditMode, saveHandler, addHandler) {
     const currentHandler = fabButton.onclick;
     if (currentHandler) {
         fabButton.removeEventListener('click', currentHandler);
@@ -179,7 +241,6 @@ export function updateFabButtonUI(isEditMode, saveHandler, addHandler) { // refr
         fabIconContainer.innerHTML = ICONS.save;
         fabButton.onclick = saveHandler;
     } else {
-        // Теперь по умолчанию кнопка - "Добавить"
         fabIconContainer.innerHTML = ICONS.add;
         fabButton.onclick = addHandler;
     }
@@ -212,8 +273,7 @@ export function hideFab() {
 }
 
 export function showFab() {
-    if (fabButton.style.display === 'flex') return; // Не показываем, если уже видна
-
+    if (fabButton.style.display === 'flex') return;
     fabButton.style.display = 'flex';
 }
 
@@ -222,7 +282,6 @@ export function openAddTaskModal(allProjects, allEmployees) {
     const tg = window.Telegram.WebApp;
     const projectsOptions = allProjects.map(p => `<option value="${p}">${p}</option>`).join('');
     
-    // ▼▼▼ Здесь также фильтруем сотрудников ▼▼▼
     const userEmployees = allEmployees.filter(e => e.role === 'user');
     const employeesCheckboxes = userEmployees.map(e => `<label class="flex items-center space-x-3 p-3 rounded-md hover:bg-gray-200"><input type="checkbox" value="${e.name}" class="employee-checkbox w-4 h-4 rounded"><span>${e.name}</span></label>`).join('');
 
@@ -263,29 +322,24 @@ export function closeAddTaskModal() {
     const tg = window.Telegram.WebApp;
     document.getElementById('add-task-modal').classList.remove('active');
     document.body.classList.remove('overflow-hidden');
-    // Прячем кнопку "Назад" и убираем с неё обработчик
     tg.BackButton.hide();
     tg.BackButton.offClick(closeAddTaskModal);
 }
 
-// Новая функция для входа в режим редактирования
 export function enterEditMode(detailsContainer, onBackCallback) {
     const tg = window.Telegram.WebApp;
     detailsContainer.classList.add('edit-mode');
     
-    // Показываем системную кнопку "Назад" и назначаем ей действие
     tg.BackButton.onClick(onBackCallback);
     tg.BackButton.show();
 }
 
-// Новая функция для выхода из режима редактирования
 export function exitEditMode(detailsContainer) {
     const tg = window.Telegram.WebApp;
     if (detailsContainer) {
         detailsContainer.classList.remove('edit-mode');
     }
     
-    // Прячем системную кнопку "Назад" и убираем обработчик
     tg.BackButton.hide();
-    tg.BackButton.offClick(exitEditMode); // Используем саму себя для отписки
+    tg.BackButton.offClick(exitEditMode);
 }
