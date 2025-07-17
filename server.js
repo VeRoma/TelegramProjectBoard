@@ -72,6 +72,7 @@ app.post('/api/requestregistration', (req, res) => {
 
 
 // Получение данных теперь возвращает только проекты/задачи
+
 app.post('/api/appdata', loadSheetData, async (req, res) => {
     try {
         const { tasks: tasksSheet } = req.sheets;
@@ -82,13 +83,19 @@ app.post('/api/appdata', loadSheetData, async (req, res) => {
         }
 
         let projects = {};
+        // Получаем все строки один раз
         const allTasksRows = await tasksSheet.getRows();
-        const allProjects = [...new Set(allTasksRows.map(r => r.get('Проект')).filter(Boolean))];
+        // ▼▼▼ Фильтруем пустые задачи сразу ▼▼▼
+        const validTasksRows = allTasksRows.filter(row => row.get('Наименование'));
+
+        const allProjects = [...new Set(validTasksRows.map(r => r.get('Проект')).filter(Boolean))];
 
         if (userRole === 'user') {
             if (doc.sheetsByTitle[userName]) {
                 const userTasksSheet = doc.sheetsByTitle[userName];
-                const userTasksRows = await userTasksSheet.getRows();
+                // Получаем строки и сразу фильтруем их
+                const userTasksRows = (await userTasksSheet.getRows()).filter(row => row.get('Наименование'));
+
                 projects[userName] = {
                     name: userName,
                     tasks: userTasksRows.map(row => ({
@@ -99,14 +106,15 @@ app.post('/api/appdata', loadSheetData, async (req, res) => {
                         rowIndex: row.get('rowIndex'),
                         version: row.get('Версия') || 0,
                         project: row.get('Проект'),
-                        приоритет: row.get('Приоритет') || 99 // Добавляем приоритет
+                        приоритет: row.get('Приоритет') || 99
                     }))
                 };
             } else {
                 console.warn(`Лист "${userName}" для пользователя ${user.id} не найден.`);
             }
         } else { // admin, owner, etc.
-            allTasksRows.forEach((row, index) => {
+            // Используем уже отфильтрованный массив validTasksRows
+            validTasksRows.forEach((row, index) => {
                 const projectName = row.get('Проект');
                 if (!projectName) return;
                 if (!projects[projectName]) {
@@ -115,9 +123,9 @@ app.post('/api/appdata', loadSheetData, async (req, res) => {
                 projects[projectName].tasks.push({
                     name: row.get('Наименование'), status: row.get('Статус'),
                     responsible: row.get('Ответственный'), message: row.get('Сообщение исполнителю'),
-                    version: row.get('Версия') || 0, rowIndex: index + 2,
+                    version: row.get('Версия') || 0, rowIndex: row.get('rowIndex'), // Используем rowIndex из таблицы
                     project: projectName,
-                    приоритет: row.get('Приоритет') || 99 // Добавляем приоритет
+                    приоритет: row.get('Приоритет') || 99
                 });
             });
         }
@@ -128,7 +136,6 @@ app.post('/api/appdata', loadSheetData, async (req, res) => {
         res.status(500).json({ error: error.message });
     }
 });
-
 
 app.post('/api/updatetask', loadSheetData, async (req, res) => {
     try {
@@ -187,6 +194,62 @@ app.post('/api/updatepriorities', loadSheetData, async (req, res) => {
     }
 });
 
+app.post('/api/addtask', loadSheetData, async (req, res) => {
+    try {
+        const newTaskData = req.body;
+        const tasksSheet = req.sheets.tasks;
+
+        // 1. Добавляем новую строку
+        const newRow = await tasksSheet.addRow({
+            Наименование: newTaskData.name,
+            Проект: newTaskData.project,
+            Статус: newTaskData.status,
+            Ответственный: newTaskData.responsible,
+            'Сообщение исполнителю': newTaskData.message,
+            Приоритет: newTaskData.приоритет,
+            Версия: 0,
+        });
+
+        // 2. Устанавливаем и сохраняем rowIndex
+        const newRowIndex = newRow.rowNumber;
+        newRow.set('rowIndex', newRowIndex);
+        await newRow.save();
+
+        // 3. Отправляем уведомления (этот блок без изменений)
+        if (newTaskData.responsibleUserIds && newTaskData.creatorId) {
+            newTaskData.responsibleUserIds.forEach(userId => {
+                if (userId !== newTaskData.creatorId) {
+                    const message = newTaskData.приоритет === 1 
+                        ? `❗️Вам назначена новая задача с наивысшим приоритетом: «${newTaskData.name}»`
+                        : `Вам назначена новая задача: «${newTaskData.name}»`;
+                    bot.sendMessage(userId, message).catch(err => console.error(`Failed to send message to ${userId}:`, err));
+                }
+            });
+        }
+        
+        // ▼▼▼ НАЧАЛО ИЗМЕНЕНИЯ ▼▼▼
+        // 4. Формируем ответ с правильными ключами, которые ожидает фронтенд
+        const responseTask = {
+            name: newRow.get('Наименование'),
+            project: newRow.get('Проект'),
+            status: newRow.get('Статус'),
+            responsible: newRow.get('Ответственный'),
+            message: newRow.get('Сообщение исполнителю'),
+            приоритет: newRow.get('Приоритет'),
+            version: newRow.get('Версия'),
+            rowIndex: newRow.get('rowIndex')
+        };
+
+        // 5. Отправляем правильно сформированный объект
+        res.status(200).json({ status: 'success', task: responseTask });
+        // ▲▲▲ КОНЕЦ ИЗМЕНЕНИЯ ▲▲▲
+
+    } catch (error) {
+        console.error('!!! ОШИБКА в /api/addtask:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
 app.post('/api/log', (req, res) => {
     const { level = 'INFO', message, context } = req.body;
     console.log(`[CLIENT ${level}] ${message}`, context || '');
@@ -197,12 +260,3 @@ app.listen(PORT, () => {
     console.log(`Сервер запущен на порту ${PORT}`);
 });
 
-// --- Middleware для логирования запросов ---
-app.use((req, res, next) => {
-    console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
-    // This check prevents the crash on GET requests
-    if (req.body && Object.keys(req.body).length) {
-        console.log('  Данные запроса:', req.body);
-    }
-    next();
-});

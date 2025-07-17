@@ -49,3 +49,11 @@ export function updatePriorities(tasks) {
         body: JSON.stringify({ tasks })
     }).then(res => res.json());
 }
+
+export function addTask(taskData) {
+    return fetch('/api/addtask', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(taskData)
+    }).then(res => res.json());
+}

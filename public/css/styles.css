@@ -96,7 +96,10 @@ body {
 }
 
 .modal-body-employee {
-    max-height: 60vh;
+    max-height: 25vh;
+    /* Ограничиваем высоту блока (25% от высоты экрана) */
+    overflow-y: auto;
+    /* Добавляем вертикальную прокрутку, если контент не помещается */
 }
 
 #toast-notification {
@@ -143,3 +146,4 @@ body {
 .drag-over {
     border-top: 3px solid var(--tg-theme-button-color, #40a7e3) !important;
 }
+

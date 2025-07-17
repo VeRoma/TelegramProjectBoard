@@ -9,10 +9,12 @@ const fabIconContainer = document.getElementById('fab-icon-container');
 const statusModal = document.getElementById('status-modal');
 const employeeModal = document.getElementById('employee-modal');
 const projectModal = document.getElementById('project-modal');
+const addTaskModal = document.getElementById('add-task-modal');
 
 const ICONS = {
     refresh: `<svg class="h-7 w-7" fill="none" viewBox="0 0 24 24" stroke="var(--tg-theme-button-text-color, #ffffff)" stroke-width="2"><path d="M21 12a9 9 0 1 1-6.219-8.56" stroke-linecap="round" stroke-linejoin="round"></path></svg>`,
-    save: `<svg class="h-7 w-7" fill="none" viewBox="0 0 24 24" stroke="var(--tg-theme-button-text-color, #ffffff)" stroke-width="2"><path d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" stroke-linecap="round" stroke-linejoin="round"></path></svg>`
+    save: `<svg class="h-7 w-7" fill="none" viewBox="0 0 24 24" stroke="var(--tg-theme-button-text-color, #ffffff)" stroke-width="2"><path d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" stroke-linecap="round" stroke-linejoin="round"></path></svg>`,
+    add: `<svg class="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="var(--tg-theme-button-text-color, #ffffff)" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"></path></svg>`
 };
 
 let saveTimeout;
@@ -113,6 +115,7 @@ export function renderTaskDetails(detailsContainer) {
 }
 
 export function openStatusModal(activeTaskDetailsElement) {
+    document.body.classList.add('overflow-hidden');
     const currentStatus = activeTaskDetailsElement.querySelector('.task-status-view').textContent;
     statusModal.innerHTML = `<div class="modal-content"><div class="p-4 border-b" style="border-color: var(--tg-theme-hint-color);"><h3 class="text-lg font-bold">Выберите статус</h3></div><div class="modal-body">${statuses.map(s => `<label class="flex items-center space-x-3 p-3 rounded-md hover:bg-gray-200"><input type="radio" name="status" value="${s}" ${s === currentStatus ? 'checked' : ''} class="w-4 h-4"><span>${s}</span></label>`).join('')}</div><div class="p-2 border-t flex justify-end" style="border-color: var(--tg-theme-hint-color);"><button class="modal-select-btn px-4 py-2 rounded-lg">Выбрать</button></div></div>`;
     statusModal.classList.add('active');
@@ -120,14 +123,19 @@ export function openStatusModal(activeTaskDetailsElement) {
 }
 
 export function openEmployeeModal(activeTaskDetailsElement) {
+    document.body.classList.add('overflow-hidden');
     const currentResponsible = activeTaskDetailsElement.querySelector('.task-responsible-view').textContent.split(',').map(n => n.trim());
-    const employeeNames = employees.map(e => e.name);
-    employeeModal.innerHTML = `<div class="modal-content"><div class="p-4 border-b" style="border-color: var(--tg-theme-hint-color);"><h3 class="text-lg font-bold">Выберите ответственных</h3></div><div class="modal-body modal-body-employee">${employeeNames.map(e => `<label class="flex items-center space-x-3 p-3 rounded-md hover:bg-gray-200"><input type="checkbox" value="${e}" ${currentResponsible.includes(e) ? 'checked' : ''} class="employee-checkbox w-4 h-4 rounded"><span>${e}</span></label>`).join('')}</div><div class="p-2 border-t flex justify-end" style="border-color: var(--tg-theme-hint-color);"><button class="modal-select-btn px-4 py-2 rounded-lg">Выбрать</button></div></div>`;
+    
+    // ▼▼▼ Фильтруем сотрудников, оставляя только тех, у кого role === 'user' ▼▼▼
+    const userEmployees = employees.filter(e => e.role === 'user').map(e => e.name);
+    
+    employeeModal.innerHTML = `<div class="modal-content"><div class="p-4 border-b" style="border-color: var(--tg-theme-hint-color);"><h3 class="text-lg font-bold">Выберите ответственных</h3></div><div class="modal-body modal-body-employee">${userEmployees.map(e => `<label class="flex items-center space-x-3 p-3 rounded-md hover:bg-gray-200"><input type="checkbox" value="${e}" ${currentResponsible.includes(e) ? 'checked' : ''} class="employee-checkbox w-4 h-4 rounded"><span>${e}</span></label>`).join('')}</div><div class="p-2 border-t flex justify-end" style="border-color: var(--tg-theme-hint-color);"><button class="modal-select-btn px-4 py-2 rounded-lg">Выбрать</button></div></div>`;
     employeeModal.classList.add('active');
     employeeModal.dataset.targetElement = `#${activeTaskDetailsElement.id || (activeTaskDetailsElement.id = `task-${Date.now()}`)}`;
 }
 
 export function openProjectModal(activeTaskDetailsElement, allProjects) {
+    document.body.classList.add('overflow-hidden');
     const currentProject = activeTaskDetailsElement.querySelector('.task-project-view').textContent;
     projectModal.innerHTML = `<div class="modal-content"><div class="p-4 border-b" style="border-color: var(--tg-theme-hint-color);"><h3 class="text-lg font-bold">Выберите проект</h3></div><div class="modal-body">${allProjects.map(p => `<label class="flex items-center space-x-3 p-3 rounded-md hover:bg-gray-200"><input type="radio" name="project" value="${p}" ${p === currentProject ? 'checked' : ''} class="w-4 h-4"><span>${p}</span></label>`).join('')}</div><div class="p-2 border-t flex justify-end" style="border-color: var(--tg-theme-hint-color);"><button class="modal-select-btn px-4 py-2 rounded-lg">Выбрать</button></div></div>`;
     projectModal.classList.add('active');
@@ -135,29 +143,17 @@ export function openProjectModal(activeTaskDetailsElement, allProjects) {
 }
 
 export function setupModals() {
-    [statusModal, employeeModal, projectModal].forEach(modal => {
+    [statusModal, employeeModal, projectModal, addTaskModal].forEach(modal => {
         modal.addEventListener('click', (e) => {
-            if (e.target === modal || e.target.closest('.modal-select-btn')) {
-                const targetElement = document.querySelector(modal.dataset.targetElement);
-                if (!targetElement) return;
-                if (e.target.closest('.modal-select-btn')) {
-                    if (modal.id === 'status-modal') {
-                        const selected = modal.querySelector('input[name="status"]:checked');
-                        if (selected) {
-                            targetElement.querySelector('.task-status-view').textContent = selected.value;
-                        }
-                    } else if (modal.id === 'employee-modal') {
-                        const selected = [...modal.querySelectorAll('.employee-checkbox:checked')].map(cb => cb.value);
-                        targetElement.querySelector('.task-responsible-view').textContent = selected.join(', ');
-                    } else if (modal.id === 'project-modal') {
-                        const selected = modal.querySelector('input[name="project"]:checked');
-                        if (selected) {
-                            targetElement.querySelector('.task-project-view').textContent = selected.value;
-                        }
-                    }
-                }
+            if (e.target === modal && !e.target.closest('#add-task-btn')) {
+                modal.classList.remove('active');
+                document.body.classList.remove('overflow-hidden'); // Разблокируем фон
+            }
+            if (e.target.closest('.modal-select-btn') && modal.id !== 'add-task-modal') {
+                // ... (существующий код) ...
                 modal.classList.remove('active');
                 delete modal.dataset.targetElement;
+                document.body.classList.remove('overflow-hidden'); // Разблокируем фон
             }
         });
     });
@@ -173,7 +169,7 @@ export function showDataLoadError(error) {
     mainContainer.innerHTML = `<div class="p-4 bg-red-100 text-red-700 rounded-lg"><p class="font-bold">Ошибка загрузки</p><p class="text-sm mt-1">${errorMessage}</p></div>`;
 }
 
-export function updateFabButtonUI(isEditMode, saveHandler, refreshHandler) {
+export function updateFabButtonUI(isEditMode, saveHandler, addHandler) { // refreshHandler заменен на addHandler
     const currentHandler = fabButton.onclick;
     if (currentHandler) {
         fabButton.removeEventListener('click', currentHandler);
@@ -183,8 +179,9 @@ export function updateFabButtonUI(isEditMode, saveHandler, refreshHandler) {
         fabIconContainer.innerHTML = ICONS.save;
         fabButton.onclick = saveHandler;
     } else {
-        fabIconContainer.innerHTML = ICONS.refresh;
-        fabButton.onclick = refreshHandler;
+        // Теперь по умолчанию кнопка - "Добавить"
+        fabIconContainer.innerHTML = ICONS.add;
+        fabButton.onclick = addHandler;
     }
 }
 
@@ -194,6 +191,7 @@ export function showAccessDeniedScreen() {
 }
 
 export function showRegistrationModal() {
+    document.body.classList.add('overflow-hidden');
     document.getElementById('app').classList.add('hidden');
     document.getElementById('registration-modal').classList.add('active');
 }
@@ -217,4 +215,77 @@ export function showFab() {
     if (fabButton.style.display === 'flex') return; // Не показываем, если уже видна
 
     fabButton.style.display = 'flex';
+}
+
+export function openAddTaskModal(allProjects, allEmployees) {
+    document.body.classList.add('overflow-hidden');
+    const tg = window.Telegram.WebApp;
+    const projectsOptions = allProjects.map(p => `<option value="${p}">${p}</option>`).join('');
+    
+    // ▼▼▼ Здесь также фильтруем сотрудников ▼▼▼
+    const userEmployees = allEmployees.filter(e => e.role === 'user');
+    const employeesCheckboxes = userEmployees.map(e => `<label class="flex items-center space-x-3 p-3 rounded-md hover:bg-gray-200"><input type="checkbox" value="${e.name}" class="employee-checkbox w-4 h-4 rounded"><span>${e.name}</span></label>`).join('');
+
+    addTaskModal.innerHTML = `
+        <div class="modal-content">
+            <div class="p-4 border-b">
+                <h3 class="text-lg font-bold">Новая задача</h3>
+            </div>
+            <div class="modal-body space-y-4">
+                <div>
+                    <label class="text-xs font-medium text-gray-500">Наименование</label>
+                    <input type="text" id="new-task-name" class="details-input mt-1" placeholder="Название задачи">
+                </div>
+                <div>
+                    <label class="text-xs font-medium text-gray-500">Проект</label>
+                    <select id="new-task-project" class="details-input mt-1">${projectsOptions}</select>
+                </div>
+                <div>
+                    <label class="text-xs font-medium text-gray-500">Сообщение исполнителю</label>
+                    <textarea id="new-task-message" rows="3" class="details-input mt-1"></textarea>
+                </div>
+                <div>
+                    <label class="text-xs font-medium text-gray-500">Ответственные</label>
+                    <div class="modal-body-employee mt-1 border rounded-md p-2">${employeesCheckboxes}</div>
+                </div>
+            </div>
+            <div class="p-2 border-t flex justify-end">
+                <button id="add-task-btn" class="modal-select-btn px-4 py-2 rounded-lg">Создать</button>
+            </div>
+        </div>`;
+    addTaskModal.classList.add('active');
+
+    tg.BackButton.onClick(closeAddTaskModal);
+    tg.BackButton.show();
+}
+
+export function closeAddTaskModal() {
+    const tg = window.Telegram.WebApp;
+    document.getElementById('add-task-modal').classList.remove('active');
+    document.body.classList.remove('overflow-hidden');
+    // Прячем кнопку "Назад" и убираем с неё обработчик
+    tg.BackButton.hide();
+    tg.BackButton.offClick(closeAddTaskModal);
+}
+
+// Новая функция для входа в режим редактирования
+export function enterEditMode(detailsContainer, onBackCallback) {
+    const tg = window.Telegram.WebApp;
+    detailsContainer.classList.add('edit-mode');
+    
+    // Показываем системную кнопку "Назад" и назначаем ей действие
+    tg.BackButton.onClick(onBackCallback);
+    tg.BackButton.show();
+}
+
+// Новая функция для выхода из режима редактирования
+export function exitEditMode(detailsContainer) {
+    const tg = window.Telegram.WebApp;
+    if (detailsContainer) {
+        detailsContainer.classList.remove('edit-mode');
+    }
+    
+    // Прячем системную кнопку "Назад" и убираем обработчик
+    tg.BackButton.hide();
+    tg.BackButton.offClick(exitEditMode); // Используем саму себя для отписки
 }
