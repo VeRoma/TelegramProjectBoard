@@ -41,6 +41,24 @@ function getStatusSymbol(status) {
     return symbols[status] || '';
 }
 
+function renderTaskCard(task, isUserView) {
+    const taskDataString = JSON.stringify(task).replace(/'/g, '&apos;');
+    const headerTopLine = isUserView ? task.project : (task.responsible || 'Не назначен');
+    
+    return `<div class="card rounded-xl shadow-md overflow-hidden" draggable="true" data-task-id="${task.rowIndex}">
+                <div class="task-header p-3 flex justify-between items-center gap-3 cursor-pointer select-none">
+                    <div class="flex-grow min-w-0">
+                        <p class="text-xs pointer-events-none" style="color: var(--tg-theme-hint-color);">${headerTopLine}</p>
+                        <p class="font-medium pointer-events-none line-clamp-2">${task.name}</p>
+                    </div>
+                    <div class="task-status-checker status-action-area" data-status="${task.status}">
+                        ${getStatusSymbol(task.status)}
+                    </div>
+                </div>
+                <div id="task-details-${task.rowIndex}" class="task-details collapsible-content px-4 pb-4" data-task='${taskDataString}'></div>
+            </div>`;
+}
+
 export function renderProjects(projects, userName) {
     appHeader.classList.add('hidden-header');
     mainContainer.innerHTML = '<div id="projects-container" class="space-y-4"></div>';
@@ -62,21 +80,7 @@ export function renderProjects(projects, userName) {
 
         userTasks.sort((a, b) => a.приоритет - b.приоритет);
 
-        const tasksHtml = userTasks.map(task => {
-            const taskDataString = JSON.stringify(task).replace(/'/g, '&apos;');
-            return `<div class="card rounded-xl shadow-md overflow-hidden" draggable="true" data-task-id="${task.rowIndex}">
-                        <div class="task-header p-3 flex justify-between items-center gap-3 cursor-pointer select-none">
-                            <div class="flex-grow min-w-0">
-                                <p class="text-xs pointer-events-none" style="color: var(--tg-theme-hint-color);">${task.project}</p>
-                                <p class="font-medium pointer-events-none line-clamp-2">${task.name}</p>
-                            </div>
-                            <div class="task-status-checker status-action-area" data-status="${task.status}">
-                                ${getStatusSymbol(task.status)}
-                            </div>
-                        </div>
-                        <div id="task-details-${task.rowIndex}" class="task-details collapsible-content px-4 pb-4" data-task='${taskDataString}'></div>
-                    </div>`;
-        }).join('');
+        const tasksHtml = userTasks.map(task => renderTaskCard(task, true)).join('');
         projectsContainer.innerHTML = tasksHtml;
 
     } else {
@@ -86,22 +90,29 @@ export function renderProjects(projects, userName) {
             
             project.tasks.sort((a, b) => a.приоритет - b.приоритет);
             
-            let tasksHtml = project.tasks.map(task => {
-                const taskDataString = JSON.stringify(task).replace(/'/g, '&apos;');
-                return `<div class="task-container" draggable="true" data-task-id="${task.rowIndex}">
-                            <div class="task-header p-3 flex justify-between items-center gap-3 cursor-pointer select-none">
-                                <div class="flex-grow min-w-0">
-                                    <p class="text-xs pointer-events-none" style="color: var(--tg-theme-hint-color);">${task.project}</p>
-                                    <p class="font-medium pointer-events-none line-clamp-2">${task.name}</p>
-                                </div>
-                                <div class="task-status-checker status-action-area" data-status="${task.status}">
-                                    ${getStatusSymbol(task.status)}
-                                </div>
-                            </div>
-                            <div id="task-details-${task.rowIndex}" class="task-details collapsible-content px-4 pb-4" data-task='${taskDataString}'></div>
-                        </div>`;
-            }).join('');
-            projectCard.innerHTML = `<div class="project-header p-4 cursor-pointer"><h2 class="font-bold text-lg pointer-events-none">${project.name}</h2><p class="text-sm mt-1 pointer-events-none" style="color: var(--tg-theme-hint-color);">РџСЂРѕРµРєС‚РѕРІ: ${project.tasks.length} задач(и)</p></div><div class="tasks-list collapsible-content expanded">${tasksHtml}</div>`;
+            let tasksInWork = 0;
+            const responsibleEmployees = new Set();
+
+            project.tasks.forEach(task => {
+                if (task.status === 'В работе') {
+                    tasksInWork++;
+                    if (task.responsible) {
+                        task.responsible.split(',').map(name => name.trim()).filter(Boolean).forEach(name => {
+                            responsibleEmployees.add(name);
+                        });
+                    }
+                }
+            });
+
+            const responsibleCount = responsibleEmployees.size;
+            let responsibleText = '';
+            if (responsibleCount > 0) {
+                responsibleText = ` (выполняют ${responsibleCount} сотрудника)`;
+            }
+            const projectTasksInfo = `${tasksInWork} задач в работе${responsibleText}`;
+
+            let tasksHtml = project.tasks.map(task => renderTaskCard(task, false)).join('');
+            projectCard.innerHTML = `<div class="project-header p-4 cursor-pointer"><h2 class="font-bold text-lg pointer-events-none">${project.name}</h2><p class="text-sm mt-1 pointer-events-none" style="color: var(--tg-theme-hint-color);">${projectTasksInfo}</p></div><div class="tasks-list collapsible-content">${tasksHtml}</div>`;
             projectsContainer.appendChild(projectCard);
         });
     }
