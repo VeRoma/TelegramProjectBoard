@@ -16,7 +16,6 @@ if (!process.env.SPREADSHEET_ID || !process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL || 
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Единый, исправленный логгер
 app.use((req, res, next) => {
     console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
     if (req.body && Object.keys(req.body).length) {
@@ -38,11 +37,14 @@ const loadSheetData = async (req, res, next) => {
         await doc.loadInfo();
         req.sheets = {
             tasks: doc.sheetsByTitle['Задачи'],
+            statuses: doc.sheetsByTitle['Статусы'],
+            employees: doc.sheetsByTitle['Сотрудники'],
+            logs: doc.sheetsByTitle['Logs']
         };
 
-        if (!req.sheets.tasks) {
-            console.error('Обязательный лист "Задачи" не найден в таблице.');
-            return res.status(500).json({ error: 'Ошибка конфигурации сервера: не найден лист "Задачи".' });
+        if (!req.sheets.tasks || !req.sheets.statuses || !req.sheets.employees || !req.sheets.logs) {
+            console.error('Один или несколько обязательных листов не найдены в таблице.');
+            return res.status(500).json({ error: 'Ошибка конфигурации сервера: не найдены необходимые листы в таблице.' });
         }
         next();
     } catch (error) {
@@ -51,35 +53,88 @@ const loadSheetData = async (req, res, next) => {
     }
 };
 
-// --- API Endpoints ---
-
-app.post('/api/verifyuser', (req, res) => {
+app.post('/api/verifyuser', loadSheetData, async (req, res) => {
     const { user } = req.body;
     if (!user || !user.id) {
         return res.status(400).json({ error: 'User object is required' });
     }
-    res.status(200).json({ status: 'authorized' });
+    try {
+        const { employees: employeeSheet, logs: logSheet } = req.sheets;
+        const rows = await employeeSheet.getRows();
+        const userRow = rows.find(row => row.get('UserID') == user.id);
+
+        if (userRow) {
+            if (logSheet) {
+                await logSheet.addRow({
+                    Timestamp: new Date().toISOString(),
+                    UserID: user.id,
+                    Username: user.username || '',
+                    FirstName: user.first_name || '',
+                    LastName: user.last_name || ''
+                });
+            }
+            res.status(200).json({ status: 'authorized', name: userRow.get('Имя'), role: userRow.get('Role') });
+        }  else {
+            res.status(200).json({ status: 'unregistered' });
+        }
+    } catch (error) {
+        console.error('Ошибка верификации пользователя:', error);
+        res.status(500).json({ error: error.message });
+    }
 });
 
-app.post('/api/requestregistration', (req, res) => {
-    console.warn("Вызов /api/requestregistration. Эта функция требует доработки.");
-    res.status(501).json({ error: 'Функция временно не поддерживается' });
+app.post('/api/requestregistration', loadSheetData, async (req, res) => {
+    const { name, userId } = req.body;
+    try {
+        const rows = await req.sheets.employees.getRows();
+        const owner = rows.find(row => row.get('Role') === 'owner');
+
+        if (owner && owner.get('UserID')) {
+            const ownerId = owner.get('UserID');
+            const message = `❗️ Запрос на регистрацию ❗️\n\nИмя: ${name}\nUserID:\n\`${userId}\`\n\nПожалуйста, добавьте этого пользователя в систему.`;
+            
+            await bot.sendMessage(ownerId, message, { parse_mode: 'Markdown' });
+            res.status(200).json({ status: 'request_sent' });
+        } else {
+            throw new Error('Владелец (owner) с UserID не найден в таблице.');
+        }
+    } catch (error) {
+        console.error('Ошибка отправки запроса на регистрацию:', error);
+        res.status(500).json({ error: error.message });
+    }
 });
 
 app.post('/api/appdata', loadSheetData, async (req, res) => {
     try {
-        const { tasks: tasksSheet } = req.sheets;
-        const { user, userName, userRole } = req.body;
+        const { tasks: tasksSheet, employees: employeesSheet } = req.sheets;
+        const { user } = req.body;
 
-        if (!user || !user.id || !userName || !userRole) {
+        if (!user || !user.id) {
             return res.status(400).json({ error: 'User info is required' });
         }
+
+        const employeeRows = await employeesSheet.getRows();
+        const currentUserRecord = employeeRows.find(row => row.get('UserID') == user.id);
+
+        if (!currentUserRecord) {
+            return res.status(401).json({ error: 'Unauthorized: User not found in employees sheet' });
+        }
+
+        const userName = currentUserRecord.get('Имя');
+        const userRole = currentUserRecord.get('Role');
 
         let projects = {};
         const allTasksRows = await tasksSheet.getRows();
         const validTasksRows = allTasksRows.filter(row => row.get('Наименование'));
 
         const allProjects = [...new Set(validTasksRows.map(r => r.get('Проект')).filter(Boolean))];
+
+        const allEmployees = employeeRows.map(row => ({
+            name: row.get('Имя'),
+            phoneNumber: row.get('Номер телефона'),
+            userId: row.get('UserID'),
+            role: row.get('Role')
+        }));
 
         if (userRole === 'user') {
             if (doc.sheetsByTitle[userName]) {
@@ -102,7 +157,7 @@ app.post('/api/appdata', loadSheetData, async (req, res) => {
             } else {
                 console.warn(`Лист "${userName}" для пользователя ${user.id} не найден.`);
             }
-        } else { // admin, owner, etc.
+        } else {
             validTasksRows.forEach((row) => {
                 const projectName = row.get('Проект');
                 if (!projectName) return;
@@ -119,7 +174,7 @@ app.post('/api/appdata', loadSheetData, async (req, res) => {
             });
         }
         
-        res.status(200).json({ projects: Object.values(projects), allProjects });
+        res.status(200).json({ projects: Object.values(projects), allProjects, userName, userRole, allEmployees });
     } catch (error) {
         console.error('Ошибка в /api/appdata:', error);
         res.status(500).json({ error: error.message });
@@ -138,7 +193,6 @@ app.post('/api/updatetask', loadSheetData, async (req, res) => {
 
         const currentVersion = rowToUpdate.get('Версия') || 0;
         
-        // Обновляем только те поля, которые были изменены
         rowToUpdate.set('Наименование', taskData.name);
         rowToUpdate.set('Статус', taskData.status);
         rowToUpdate.set('Проект', taskData.project);
@@ -170,7 +224,6 @@ app.post('/api/updatepriorities', loadSheetData, async (req, res) => {
         await tasksSheet.loadCells();
 
         for (const task of updatedTasks) {
-            // Замените 'I' на букву вашей колонки "Приоритет"
             const priorityCell = tasksSheet.getCellByA1(`I${task.rowIndex}`); 
             priorityCell.value = task.приоритет;
         }

@@ -21,11 +21,11 @@ export function verifyUser(user) {
         body: JSON.stringify({ user })
     }).then(res => res.json());
 }
-export function requestRegistration(name, userId) {
+export function requestRegistration(name, userId, ownerId) {
     return fetch('/api/requestregistration', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, userId })
+        body: JSON.stringify({ name, userId, ownerId })
     }).then(res => res.json());
 }
 

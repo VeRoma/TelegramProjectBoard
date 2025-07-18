@@ -1,30 +1,16 @@
 import * as api from './api.js';
 import * as ui from './ui.js';
-import { employees } from './data/employees.js';
+// Removed: import { employees } from './data/employees.js';
 
 let allProjects = [];
 let appData = {};
+let allEmployees = []; // New global variable to store employees from server
 
 document.addEventListener('DOMContentLoaded', () => {
     const tg = window.Telegram.WebApp;
     tg.ready();
 
-    const urlParams = new URLSearchParams(window.location.search);
-    const debugUserId = parseInt(urlParams.get('debug_user_id'), 10);
-
-    if (debugUserId) {
-        const debugUserRecord = employees.find(e => e.userId === debugUserId);
-        if (debugUserRecord) {
-            tg.initDataUnsafe.user = {
-                id: debugUserRecord.userId,
-                first_name: debugUserRecord.name,
-                username: debugUserRecord.name.toLowerCase(),
-            };
-            console.warn(`!!! РЕЖИМ ОТЛАДКИ АКТИВЕН для пользователя: ${debugUserRecord.name} !!!`);
-        } else {
-            console.error(`Пользователь для отладки с ID ${debugUserId} не найден в employees.js`);
-        }
-    }
+    // Removed debugUserId block
 
     const mainContainer = document.getElementById('main-content');
     
@@ -72,7 +58,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function handleShowAddTaskModal() {
-        ui.openAddTaskModal(allProjects, employees);
+        ui.openAddTaskModal(allProjects, allEmployees);
     }
 
     async function handleStatusUpdate(rowIndex, newStatus) {
@@ -85,8 +71,8 @@ document.addEventListener('DOMContentLoaded', () => {
         const oldStatus = task.status;
         task.status = newStatus;
 
-        const userName = employees.find(e => e.userId === tg.initDataUnsafe.user.id).name;
-        ui.renderProjects(appData.projects, userName);
+        // userName will now come from appData
+        ui.renderProjects(appData.projects, appData.userName);
         ui.showToast('Статус обновлён');
 
         try {
@@ -99,7 +85,7 @@ document.addEventListener('DOMContentLoaded', () => {
             api.logAction('Status update failed', { level: 'ERROR', error: error.message });
             tg.showAlert('Не удалось сохранить новый статус. Возвращаем как было.');
             task.status = oldStatus;
-            ui.renderProjects(appData.projects, userName);
+            ui.renderProjects(appData.projects, appData.userName);
         }
     }
 
@@ -197,7 +183,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const projectHeader = event.target.closest('.project-header');
     if (projectHeader) {
-        await handleSaveActiveTask();
         const targetList = projectHeader.nextElementSibling;
         targetList.classList.toggle('expanded');
         if (targetList.classList.contains('expanded')) {
@@ -233,14 +218,13 @@ document.addEventListener('DOMContentLoaded', () => {
         const fromIndex = Array.from(container.children).indexOf(draggedElement);
         const toIndex = Array.from(container.children).indexOf(dropTarget);
         const projectElement = draggedElement.closest('.card').querySelector('.project-header h2');
-        const projectName = projectElement ? projectElement.textContent : employees.find(e => e.userId === tg.initDataUnsafe.user.id).name;
+        const projectName = projectElement ? projectElement.textContent : appData.userName; // Use appData.userName now
         const projectData = appData.projects.find(p => p.name === projectName);
         if (!projectData) return;
         const [removed] = projectData.tasks.splice(fromIndex, 1);
         projectData.tasks.splice(toIndex, 0, removed);
         projectData.tasks.forEach((task, index) => { task.приоритет = index + 1; });
-        const userName = employees.find(e => e.userId === tg.initDataUnsafe.user.id).name;
-        ui.renderProjects(appData.projects, userName);
+        ui.renderProjects(appData.projects, appData.userName); // Use appData.userName now
         ui.showFab();
         api.updatePriorities(projectData.tasks).then(result => {
             if (result.status === 'success') { ui.showToast('Новый порядок сохранён'); } 
@@ -262,15 +246,24 @@ document.addEventListener('DOMContentLoaded', () => {
         const nameInput = document.getElementById('name-input');
         const name = nameInput.value.trim();
         const user = tg.initDataUnsafe.user;
-        if (!name) { tg.showAlert('Пожалуйста, введите ваше имя.'); return; }
+
+        if (!name) {
+            tg.showAlert('Пожалуйста, введите ваше имя.');
+            return;
+        }
+
         try {
+            api.logAction('Registration request initiated', { name });
             const result = await api.requestRegistration(name, user.id);
             if (result.status === 'request_sent') {
                 document.getElementById('registration-modal').classList.remove('active');
-                tg.showAlert('Ваш запрос на регистрацию отправлен администратору.');
+                tg.showAlert('Ваш запрос на регистрацию отправлен администратору. Вы получите уведомление после одобрения.');
                 tg.close();
-            } else { throw new Error(result.error || 'Неизвестная ошибка'); }
+            } else {
+                throw new Error(result.error || 'Неизвестная ошибка');
+            }
         } catch(error) {
+            api.logAction('Registration request failed', { level: 'ERROR', name, error: error.message });
             tg.showAlert('Ошибка отправки запроса: ' + error.message);
         }
     });
@@ -278,32 +271,45 @@ document.addEventListener('DOMContentLoaded', () => {
     async function initializeApp() {
         api.logAction('App initializing');
         const user = tg.initDataUnsafe.user;
+
         if (!user || !user.id) {
+            api.logAction('Access denied: no user data', { level: 'WARN' });
             ui.showAccessDeniedScreen();
             return;
         }
+
         try {
             ui.showLoading();
-            const currentUserRecord = employees.find(e => e.userId === user.id);
-            if (currentUserRecord) {
-                ui.setupUserInfo(currentUserRecord.name);
-                const data = await api.loadAppData({ user, userName: currentUserRecord.name, userRole: currentUserRecord.role });
+            api.logAction('Verifying user', { userId: user.id });
+            const verification = await api.verifyUser(user);
+
+            if (verification.status === 'authorized') {
+                ui.setupUserInfo(verification.name);
+                api.logAction('User authorized, loading app data', { userId: user.id, name: verification.name });
+                const data = await api.loadAppData({ user });
                 if (data && data.projects) {
                     appData = data; 
                     allProjects = data.allProjects || [];
-                    ui.renderProjects(data.projects, currentUserRecord.name);
+                    allEmployees = data.allEmployees || [];
+                    ui.renderProjects(data.projects, data.userName);
                     data.projects.forEach(p => p.tasks.forEach(t => {
                         const taskElement = document.getElementById(`task-details-${t.rowIndex}`);
                         if (taskElement) taskElement.dataset.version = t.version;
                         else console.warn(`Не удалось найти элемент для задачи с rowIndex: ${t.rowIndex}`);
                     }));
                 } else {
-                    ui.renderProjects([], currentUserRecord.name); 
+                    api.logAction('No projects data received', { userId: user.id, name: verification.name });
+                    ui.renderProjects([], verification.name); 
                 }
-            } else {
+            } else if (verification.status === 'unregistered') {
+                api.logAction('User is unregistered', { userId: user.id });
                 ui.showRegistrationModal();
+            } else {
+                api.logAction('Unknown verification status', { level: 'ERROR', userId: user.id, status: verification.status, error: verification.error });
+                throw new Error(verification.error || 'Неизвестный статус верификации');
             }
         } catch (error) {
+            api.logAction('App initialization failed', { level: 'ERROR', error: error.message });
             if (error instanceof TypeError && error.message.includes("Unexpected token")) {
                 ui.showDataLoadError(new Error("Сервер временно недоступен. Пожалуйста, попробуйте обновить страницу позже."));
             } else {
