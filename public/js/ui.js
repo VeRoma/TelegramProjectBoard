@@ -70,7 +70,7 @@ export function renderProjects(projects, userName) {
                                 <p class="text-xs pointer-events-none" style="color: var(--tg-theme-hint-color);">${task.project}</p>
                                 <p class="font-medium pointer-events-none line-clamp-2">${task.name}</p>
                             </div>
-                            <div class="task-status-checker" data-status="${task.status}">
+                            <div class="task-status-checker status-action-area" data-status="${task.status}">
                                 ${getStatusSymbol(task.status)}
                             </div>
                         </div>
@@ -94,14 +94,14 @@ export function renderProjects(projects, userName) {
                                     <p class="text-xs pointer-events-none" style="color: var(--tg-theme-hint-color);">${task.project}</p>
                                     <p class="font-medium pointer-events-none line-clamp-2">${task.name}</p>
                                 </div>
-                                <div class="task-status-checker" data-status="${task.status}">
+                                <div class="task-status-checker status-action-area" data-status="${task.status}">
                                     ${getStatusSymbol(task.status)}
                                 </div>
                             </div>
                             <div id="task-details-${task.rowIndex}" class="task-details collapsible-content px-4 pb-4" data-task='${taskDataString}'></div>
                         </div>`;
             }).join('');
-            projectCard.innerHTML = `<div class="project-header p-4 cursor-pointer"><h2 class="font-bold text-lg pointer-events-none">${project.name}</h2><p class="text-sm mt-1 pointer-events-none" style="color: var(--tg-theme-hint-color);">${project.tasks.length} задач(и)</p></div><div class="tasks-list collapsible-content expanded">${tasksHtml}</div>`;
+            projectCard.innerHTML = `<div class="project-header p-4 cursor-pointer"><h2 class="font-bold text-lg pointer-events-none">${project.name}</h2><p class="text-sm mt-1 pointer-events-none" style="color: var(--tg-theme-hint-color);">РџСЂРѕРµРєС‚РѕРІ: ${project.tasks.length} задач(и)</p></div><div class="tasks-list collapsible-content expanded">${tasksHtml}</div>`;
             projectsContainer.appendChild(projectCard);
         });
     }

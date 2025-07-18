@@ -3,13 +3,12 @@ import * as ui from './ui.js';
 import { employees } from './data/employees.js';
 
 let allProjects = [];
-let appData = {}; // Будем хранить здесь текущие данные
+let appData = {};
 
 document.addEventListener('DOMContentLoaded', () => {
     const tg = window.Telegram.WebApp;
     tg.ready();
 
-    // Блок для обхода (для отладки в браузере)
     const urlParams = new URLSearchParams(window.location.search);
     const debugUserId = parseInt(urlParams.get('debug_user_id'), 10);
 
@@ -29,8 +28,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const mainContainer = document.getElementById('main-content');
     
-    // --- ВСЕ ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ОПРЕДЕЛЕНЫ ЗДЕСЬ ---
-
     async function handleSaveActiveTask() {
         const activeEditElement = document.querySelector('.task-details.edit-mode');
         if (!activeEditElement) return;
@@ -167,7 +164,6 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
         
-        await handleSaveActiveTask();
         const detailsContainer = taskHeader.nextElementSibling;
 
         const currentlyOpen = document.querySelector('.task-details.expanded');
@@ -211,7 +207,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 });
 
-    // --- ОБРАБОТЧИКИ DRAG & DROP ---
     let draggedElement = null;
     mainContainer.addEventListener('dragstart', (e) => {
         const draggableCard = e.target.closest('[draggable="true"]');
@@ -263,7 +258,6 @@ document.addEventListener('DOMContentLoaded', () => {
         draggedElement = null;
     });
 
-    // --- ОБРАБОТЧИК РЕГИСТРАЦИИ ---
     document.getElementById('register-btn').addEventListener('click', async () => {
         const nameInput = document.getElementById('name-input');
         const name = nameInput.value.trim();
@@ -281,7 +275,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    // --- ГЛАВНАЯ ФУНКЦИЯ ИНИЦИАЛИЗАЦИИ ---
     async function initializeApp() {
         api.logAction('App initializing');
         const user = tg.initDataUnsafe.user;
@@ -319,7 +312,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
     
-    // --- ЗАПУСК ---
     ui.setupModals(handleStatusUpdate); 
     ui.updateFabButtonUI(false, handleSaveActiveTask, handleShowAddTaskModal);
     initializeApp();
