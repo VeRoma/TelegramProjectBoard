@@ -33,32 +33,18 @@ export function renderProjects(projects, userName, userRole) {
 
     const isUserView = userRole === 'user';
 
-    projects.forEach(project => {
-        let tasks = project.tasks;
-        if (isUserView) {
-            tasks = tasks.filter(task => task.status !== 'Выполнено');
-        }
-        
-        tasks.sort((a, b) => {
-            const orderA = (STATUSES.find(s => s.name === a.status) || { order: 99 }).order;
-            const orderB = (STATUSES.find(s => s.name === b.status) || { order: 99 }).order;
-            
-            if (orderA !== orderB) {
-                return orderA - orderB;
-            }
-            
-            const priorityA = parseInt(a.приоритет, 10) || 99;
-            const priorityB = parseInt(b.приоритет, 10) || 99;
-            return priorityA - priorityB;
+    // Фильтруем задачи для обычного пользователя
+    if (isUserView) {
+        projects.forEach(project => {
+            project.tasks = project.tasks.filter(task => task.status !== 'Выполнено');
         });
-        project.tasks = tasks;
-    });
-    
+    }
+
     if (isUserView) {
         let allUserTasks = [];
         projects.forEach(p => allUserTasks.push(...p.tasks));
         
-        if (!allUserTasks || allUserTasks.length === 0) {
+        if (allUserTasks.length === 0) {
             mainContainer.innerHTML = `<div class="p-4 rounded-lg text-center" style="background-color: var(--tg-theme-secondary-bg-color);">Активных задач не найдено.</div>`;
             return;
         }
@@ -68,15 +54,21 @@ export function renderProjects(projects, userName, userRole) {
             acc[task.status].push(task);
             return acc;
         }, {});
-        const sortedStatusKeys = Object.keys(tasksByStatus).sort((a,b) => (STATUSES.find(s => s.name === a) || {}).order - (STATUSES.find(s => s.name === b) || {}).order);
+        
+        const sortedStatusKeys = Object.keys(tasksByStatus).sort((a,b) => 
+            (STATUSES.find(s => s.name === a) || {}).order - (STATUSES.find(s => s.name === b) || {}).order
+        );
         
         let userHtml = '';
         sortedStatusKeys.forEach(status => {
-            userHtml += `<div class="tasks-list space-y-2" data-status-group="${status}">${tasksByStatus[status].map(task => renderTaskCard(task, true)).join('')}</div>`;
+            const tasksInGroup = tasksByStatus[status];
+            // --- СОРТИРОВКА ПРОИСХОДИТ ЗДЕСЬ ---
+            tasksInGroup.sort((a, b) => (a.приоритет || 99) - (b.приоритет || 99));
+            userHtml += `<div class="tasks-list space-y-2" data-status-group="${status}">${tasksInGroup.map(task => renderTaskCard(task, true)).join('')}</div>`;
         });
         projectsContainer.innerHTML = userHtml;
 
-    } else { 
+    } else { // Вид для admin/owner
         projects.forEach(project => {
             const projectCard = document.createElement('div');
             projectCard.className = 'card rounded-xl shadow-md overflow-hidden';
@@ -86,12 +78,19 @@ export function renderProjects(projects, userName, userRole) {
                 acc[task.status].push(task);
                 return acc;
             }, {});
-            const sortedStatusKeys = Object.keys(tasksByStatus).sort((a,b) => (STATUSES.find(s => s.name === a) || {}).order - (STATUSES.find(s => s.name === b) || {}).order);
+            
+            const sortedStatusKeys = Object.keys(tasksByStatus).sort((a,b) => 
+                (STATUSES.find(s => s.name === a) || {}).order - (STATUSES.find(s => s.name === b) || {}).order
+            );
 
             let projectHtml = '';
             sortedStatusKeys.forEach(status => {
                 const tasksInGroup = tasksByStatus[status];
                 const statusIcon = (STATUSES.find(s => s.name === status) || {}).icon || '';
+                
+                // --- И СОРТИРОВКА ПРОИСХОДИТ ЗДЕСЬ ---
+                tasksInGroup.sort((a, b) => (a.приоритет || 99) - (b.приоритет || 99));
+
                 projectHtml += `
                     <div class="status-group p-2">
                         <h3 class="status-group-header text-sm font-bold p-2" style="color: var(--tg-theme-hint-color);">${statusIcon} ${status}</h3>
