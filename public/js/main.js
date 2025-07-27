@@ -66,43 +66,16 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    // --- ПЕРЕПИСАННАЯ С НУЛЯ ЛОГИКА DRAG-N-DROP ---
     let draggedElement = null;
 
     mainContainer.addEventListener('dragstart', (e) => {
-        console.log('--- [EVENT] dragstart ---');
-        const target = e.target.closest('[draggable="true"]');
-        if (!target) return;
-        
-        draggedElement = target;
-        console.log(`[dragstart] Начато перетаскивание элемента с ID: ${draggedElement.dataset.taskId}`);
-        
-        // Даем браузеру время "схватить" элемент перед тем, как сделать его полупрозрачным
-        setTimeout(() => {
+        const draggableCard = e.target.closest('[draggable="true"]');
+        if (!draggableCard) return;
+        uiUtils.hideFab();
+        draggedElement = draggableCard;
+        setTimeout(() => { 
             draggedElement.classList.add('dragging');
         }, 0);
-        
-        uiUtils.hideFab();
-    });
-
-    mainContainer.addEventListener('dragover', (e) => {
-        e.preventDefault(); // Это обязательно, чтобы событие 'drop' сработало
-        if (!draggedElement) return;
-
-        const dragGroup = draggedElement.dataset.statusGroup;
-        const container = e.target.closest(`.tasks-list[data-status-group="${dragGroup}"]`);
-
-        // Сначала всегда убираем все подсветки
-        document.querySelectorAll('.drag-over, .drag-over-end').forEach(el => el.classList.remove('drag-over', 'drag-over-end'));
-
-        if (!container) return; // Если курсор не над "родным" контейнером, ничего не делаем
-
-        const afterElement = getDragAfterElement(container, e.clientY);
-        if (afterElement) {
-            afterElement.classList.add('drag-over');
-        } else {
-            container.classList.add('drag-over-end');
-        }
     });
 
     function getDragAfterElement(container, y) {
@@ -117,49 +90,58 @@ document.addEventListener('DOMContentLoaded', () => {
         }, { offset: Number.NEGATIVE_INFINITY }).element;
     }
 
-    mainContainer.addEventListener('drop', (e) => {
-        console.log('--- [EVENT] drop ---');
+    mainContainer.addEventListener('dragover', (e) => {
         e.preventDefault();
         if (!draggedElement) return;
+        const dragGroup = draggedElement.dataset.statusGroup;
+        const container = e.target.closest(`.tasks-list[data-status-group="${dragGroup}"]`);
+        
+        document.querySelectorAll('.drag-over, .drag-over-end').forEach(el => {
+            el.classList.remove('drag-over', 'drag-over-end');
+        });
+        if (!container) return;
+        const afterElement = getDragAfterElement(container, e.clientY);
+        
+        if (afterElement) {
+            afterElement.classList.add('drag-over');
+        } else {
+            container.classList.add('drag-over-end');
+        }
+    });
 
+    mainContainer.addEventListener('drop', (e) => {
+        e.preventDefault();
+        if (!draggedElement) return;
+        
         const dropContainer = e.target.closest(`.tasks-list[data-status-group="${draggedElement.dataset.statusGroup}"]`);
         if (!dropContainer) {
-            console.log('[drop] Элемент брошен не в свою группу. Отмена.');
-            return;
-        }
-        
+             mainContainer.dispatchEvent(new Event('dragend'));
+             return;
+        };
         const afterElement = getDragAfterElement(dropContainer, e.clientY);
         if (afterElement) {
             dropContainer.insertBefore(draggedElement, afterElement);
         } else {
             dropContainer.appendChild(draggedElement);
         }
-        console.log('[drop] Элемент вставлен в DOM в новую позицию.');
-
         const projectElement = draggedElement.closest('.card').querySelector('.project-header h2');
         const projectName = projectElement ? projectElement.textContent : appData.userName;
-        
         const tasksInGroup = Array.from(dropContainer.querySelectorAll('[draggable="true"]'));
         const updatedTaskIds = tasksInGroup.map(card => card.dataset.taskId);
-        
-        console.log(`[drop] Вызов handleDragDrop. Проект: "${projectName}", новый порядок ID:`, updatedTaskIds);
         handlers.handleDragDrop(projectName, updatedTaskIds);
     });
 
-    mainContainer.addEventListener('dragend', (e) => {
-        console.log('--- [EVENT] dragend ---');
-        // Убираем все визуальные эффекты
+    mainContainer.addEventListener('dragend', () => {
         if (draggedElement) {
             draggedElement.classList.remove('dragging');
         }
-        document.querySelectorAll('.drag-over, .drag-over-end').forEach(el => el.classList.remove('drag-over', 'drag-over-end'));
+        document.querySelectorAll('.drag-over, .drag-over-end').forEach(el => {
+            el.classList.remove('drag-over', 'drag-over-end');
+        });
         draggedElement = null;
         uiUtils.showFab();
-        console.log('[dragend] Все стили и переменные очищены.');
     });
 
-
-    // --- Логика регистрации ---
     document.getElementById('register-btn').addEventListener('click', async () => {
         const nameInput = document.getElementById('name-input');
         const name = nameInput.value.trim();
@@ -182,7 +164,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    // --- Запуск приложения ---
     async function startApp() {
         const initialData = await auth.initializeApp();
         if (initialData) {

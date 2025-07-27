@@ -26,7 +26,7 @@ export async function handleSaveActiveTask() {
 
     const responsibleText = activeEditElement.querySelector('.task-responsible-view').textContent;
     const selectedEmployees = responsibleText ? responsibleText.split(',').map(s => s.trim()).filter(Boolean) : [];
-    
+
     const updatedTask = {
         rowIndex: parseInt(activeEditElement.querySelector('.task-row-index').value, 10),
         name: activeEditElement.querySelector('.task-name-edit').value,
@@ -44,7 +44,7 @@ export async function handleSaveActiveTask() {
             tg.HapticFeedback.notificationOccurred('success');
             uiUtils.exitEditMode(activeEditElement);
             uiUtils.updateFabButtonUI(false, handleSaveActiveTask, handleShowAddTaskModal);
-            
+
             const oldTaskData = JSON.parse(activeEditElement.dataset.task);
             const newTaskData = {...oldTaskData, ...updatedTask, responsible: selectedEmployees.join(', ')};
             activeEditElement.dataset.task = JSON.stringify(newTaskData).replace(/'/g, '&apos;');
@@ -70,7 +70,6 @@ export async function handleCreateTask(taskData) {
     const tempRowIndex = `temp_${Date.now()}`;
     const optimisticTask = { ...taskData, rowIndex: tempRowIndex, version: 0 };
     let targetProject = appData.projects.find(p => p.name === optimisticTask.project);
-
     if (!targetProject) {
         targetProject = { name: optimisticTask.project, tasks: [] };
         appData.projects.push(targetProject);
@@ -79,7 +78,6 @@ export async function handleCreateTask(taskData) {
         }
     }
     targetProject.tasks.push(optimisticTask);
-
     modals.closeAddTaskModal();
     render.renderProjects(appData.projects, appData.userName, appData.userRole);
     uiUtils.showToast('Задача добавлена, сохранение...');
@@ -133,22 +131,37 @@ export function handleDragDrop(projectName, updatedTaskIdsInGroup) {
     if (!projectData) return;
 
     const taskMap = new Map(projectData.tasks.map(t => [t.rowIndex.toString(), t]));
-    
-    // 1. Обновляем приоритеты в локальных данных ТОЛЬКО для измененной группы
-    const tasksToUpdate = updatedTaskIdsInGroup.map((id, index) => {
-        const task = taskMap.get(id);
-        if (task) {
-            task.приоритет = index + 1; // Присваиваем новый локальный приоритет
-            return { rowIndex: task.rowIndex, приоритет: task.приоритет };
-        }
-    }).filter(Boolean);
 
-    // 2. СРАЗУ ЖЕ вызываем перерисовку. renderProjects сам отсортирует все правильно
-    // на основе обновленных локальных данных.
+    // 1. Создаем новый, отсортированный массив задач ТОЛЬКО для измененной группы
+    const reorderedGroup = updatedTaskIdsInGroup.map(id => taskMap.get(id));
+
+    // 2. Получаем все остальные задачи, которые не были затронуты
+    const untouchedTasks = projectData.tasks.filter(t => !updatedTaskIdsInGroup.includes(t.rowIndex.toString()));
+    
+    // 3. Собираем полный список и сортируем его по статусам, чтобы группы не смешались
+    const fullSortedTasks = [...untouchedTasks, ...reorderedGroup].sort((a, b) => {
+        const orderA = (STATUSES.find(s => s.name === a.status) || { order: 99 }).order;
+        const orderB = (STATUSES.find(s => s.name === b.status) || { order: 99 }).order;
+        return orderA - orderB;
+    });
+
+    // 4. Пересчитываем глобальные приоритеты для ВСЕХ задач проекта от 1 до N
+    const tasksToUpdate = fullSortedTasks.map((task, index) => {
+        task.приоритет = index + 1; // Обновляем приоритет в локальных данных
+        return {
+            rowIndex: task.rowIndex,
+            приоритет: task.приоритет
+        };
+    });
+
+    // 5. Сохраняем полностью отсортированный массив в наше локальное состояние
+    projectData.tasks = fullSortedTasks;
+    
+    // 6. Сразу перерисовываем интерфейс с новым порядком
     render.renderProjects(appData.projects, appData.userName, appData.userRole);
     uiUtils.showToast('Сохранение нового порядка...');
     
-    // 3. Отправляем на сервер только массив измененных задач
+    // 7. Отправляем на сервер ПОЛНЫЙ список задач с новыми приоритетами
     api.updatePriorities({tasks: tasksToUpdate, modifierName: appData.userName})
         .then(result => {
             if (result.status === 'success') {

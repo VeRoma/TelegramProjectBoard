@@ -1,11 +1,5 @@
 import { STATUSES } from '../data/statuses.js';
 
-/**
- * Генерирует HTML для одной карточки задачи.
- * @param {object} task - Объект задачи.
- * @param {boolean} isUserView - Флаг, указывающий, является ли вид персональным для пользователя.
- * @returns {string} - HTML-строка карточки.
- */
 function renderTaskCard(task, isUserView) {
     const taskDataString = JSON.stringify(task).replace(/'/g, '&apos;');
     const headerTopLine = isUserView ? task.project : (task.responsible || 'Не назначен');
@@ -25,12 +19,6 @@ function renderTaskCard(task, isUserView) {
             </div>`;
 }
 
-/**
- * Рендерит все проекты и задачи на главном экране.
- * @param {Array<object>} projects - Массив проектов.
- * @param {string} userName - Имя текущего пользователя.
- * @param {string} userRole - Роль текущего пользователя.
- */
 export function renderProjects(projects, userName, userRole) {
     const appHeader = document.getElementById('app-header');
     const mainContainer = document.getElementById('main-content');
@@ -45,39 +33,27 @@ export function renderProjects(projects, userName, userRole) {
 
     const isUserView = userRole === 'user';
 
-    // --- НОВАЯ, ПЕРЕПИСАННАЯ С НУЛЯ ЛОГИКА СОРТИРОВКИ ---
     projects.forEach(project => {
-        let tasksToProcess = project.tasks;
-
-        // 1. Фильтруем задачи для обычного пользователя
+        let tasks = project.tasks;
         if (isUserView) {
-            tasksToProcess = tasksToProcess.filter(task => task.status !== 'Выполнено');
+            tasks = tasks.filter(task => task.status !== 'Выполнено');
         }
         
-        // 2. Сортируем задачи по двум правилам
-        tasksToProcess.sort((a, b) => {
-            // Правило 1: Сортировка по группе статуса
-            const statusA = STATUSES.find(s => s.name === a.status) || { order: 99 };
-            const statusB = STATUSES.find(s => s.name === b.status) || { order: 99 };
+        tasks.sort((a, b) => {
+            const orderA = (STATUSES.find(s => s.name === a.status) || { order: 99 }).order;
+            const orderB = (STATUSES.find(s => s.name === b.status) || { order: 99 }).order;
             
-            if (statusA.order !== statusB.order) {
-                return statusA.order - statusB.order;
+            if (orderA !== orderB) {
+                return orderA - orderB;
             }
             
-            // Правило 2: Сортировка по Приоритету (как по числам)
-            // Гарантируем, что даже если данные "грязные", они будут обработаны как числа.
-            // Пустые значения получают низший приоритет (999).
-            const priorityA = a.приоритет ? parseInt(a.приоритет, 10) : 999;
-            const priorityB = b.приоритет ? parseInt(b.приоритет, 10) : 999;
-
+            const priorityA = parseInt(a.приоритет, 10) || 99;
+            const priorityB = parseInt(b.приоритет, 10) || 99;
             return priorityA - priorityB;
         });
-        
-        project.tasks = tasksToProcess; // Сохраняем отсортированный массив
+        project.tasks = tasks;
     });
-    // --- КОНЕЦ НОВОЙ ЛОГИКИ ---
     
-    // Блок рендеринга остается без изменений, так как он уже работает с отсортированными данными
     if (isUserView) {
         let allUserTasks = [];
         projects.forEach(p => allUserTasks.push(...p.tasks));
@@ -100,7 +76,7 @@ export function renderProjects(projects, userName, userRole) {
         });
         projectsContainer.innerHTML = userHtml;
 
-    } else {
+    } else { 
         projects.forEach(project => {
             const projectCard = document.createElement('div');
             projectCard.className = 'card rounded-xl shadow-md overflow-hidden';

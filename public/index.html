@@ -8,38 +8,28 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="css/styles.css">
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
 </head>
 
 <body class="overflow-x-hidden">
 
     <div id="app" class="hidden">
-        <header id="app-header" class="p-4">
-            <div id="user-info" class="text-center">
-                <h1 id="greeting-text" class="font-bold">Загрузка...</h1>
-                <p id="user-id-text" class="text-xs" style="color: var(--tg-theme-hint-color);"></p>
-            </div>
+        <header id="app-header" class="header p-4 text-center">
+            <h1 id="greeting-text" class="font-bold">Загрузка...</h1>
+            <p id="user-id-text" class="text-xs"></p>
         </header>
-
-        <main id="main-content" class="p-4">
-        </main>
-
-        <button id="fab-button" class="fixed bottom-8 right-5 rounded-full shadow-lg flex items-center justify-center"
-            style="width: 60px; height: 60px; background-color: var(--tg-theme-button-color);">
-            <div id="fab-icon-container" style="color: var(--tg-theme-button-text-color);">
-            </div>
-        </button>
+        <main id="main-content" class="p-4"></main>
     </div>
 
-    <div id="auth-blocker" class="hidden fixed inset-0 flex items-center justify-center p-4"
-        style="background-color: var(--tg-theme-secondary-bg-color);">
+    <div id="auth-blocker" class="hidden fixed inset-0 flex items-center justify-center p-4">
         <div id="registration-modal" class="modal-content w-full max-w-sm text-center">
             <h3 class="text-lg font-bold mb-2">Требуется регистрация</h3>
             <p class="mb-4 text-sm" style="color: var(--tg-theme-hint-color);">Чтобы использовать приложение, вам
                 необходимо получить доступ. Пожалуйста, введите ваше имя и отправьте запрос.</p>
             <input id="name-input" type="text" placeholder="Ваше имя" class="details-input mb-4">
-            <button id="register-btn" class="w-full px-4 py-2 rounded-lg"
-                style="background-color: var(--tg-theme-button-color); color: var(--tg-theme-button-text-color);">Отправить
-                запрос</button>
+            <button id="register-btn" class="w-full px-4 py-2 rounded-lg">Отправить запрос</button>
         </div>
     </div>
 
@@ -49,8 +39,11 @@
     <div id="add-task-modal" class="modal"></div>
 
     <div id="toast-notification" class="fixed left-1/2 -translate-x-1/2 p-3 rounded-lg shadow-lg text-white"
-        style="background-color: var(--tg-theme-button-color); transition: all 0.5s ease; bottom: -100px; opacity: 0; z-index: 9999;">
-    </div>
+        style="background-color: var(--tg-theme-button-color); z-index: 9999;"></div>
+    <button id="fab-button" class="fixed bottom-8 right-5 rounded-full shadow-lg flex items-center justify-center"
+        style="width: 60px; height: 60px; background-color: var(--tg-theme-button-color);">
+        <div id="fab-icon-container"></div>
+    </button>
 
     <div id="loading-overlay" class="fixed inset-0 z-50 flex items-center justify-center"
         style="background-color: rgba(0,0,0,0.1); display: none;">
