@@ -21,12 +21,14 @@ body {
     color: var(--tg-theme-hint-color, #999999);
 }
 
-.header.hidden-header {
+#app-header.hidden-header {
     opacity: 0;
     max-height: 0;
     padding-top: 0;
     padding-bottom: 0;
-    border-bottom: none;
+    margin-bottom: 0;
+    overflow: hidden;
+    transition: all 0.3s ease-out;
 }
 
 .card {
@@ -169,15 +171,6 @@ body {
     border-top: 1px solid var(--tg-theme-hint-color, #e0e0e0);
 }
 
-.dragging {
-    opacity: 0.5;
-    border: 2px dashed var(--tg-theme-hint-color, #cccccc);
-}
-
-.drag-over {
-    border-top: 3px solid var(--tg-theme-button-color, #40a7e3) !important;
-}
-
 @keyframes pulse-glow {
 
     0%,
@@ -246,4 +239,62 @@ body[style*="--tg-color-scheme: dark"] .task-status-checker {
 .task-status-checker[data-status="На контроле"] {
     color: #7e22ce;
     border-color: #a855f7;
+}
+
+.status-toggle {
+    display: flex;
+    border-radius: 8px;
+    overflow: hidden;
+    border: 1px solid var(--tg-theme-hint-color, #cccccc);
+    margin-top: 4px;
+}
+
+.toggle-option {
+    flex: 1;
+    padding: 10px;
+    text-align: center;
+    cursor: pointer;
+    background-color: var(--tg-theme-secondary-bg-color, #f0f0f0);
+    color: var(--tg-theme-text-color, #000000);
+    transition: background-color 0.2s, color 0.2s;
+    user-select: none;
+}
+
+.toggle-option.active {
+    background-color: var(--tg-theme-button-color, #007bff);
+    color: var(--tg-theme-button-text-color, #ffffff);
+    font-weight: 600;
+}
+
+.toggle-option:not(:last-child) {
+    border-right: 1px solid var(--tg-theme-hint-color, #cccccc);
+}
+
+/* --- Стили для Drag-n-Drop --- */
+
+.task-card-container.dragging {
+    opacity: 0.4;
+    transform: scale(1.03);
+}
+
+.drag-over::before {
+    content: '';
+    display: block;
+    height: 60px;
+    margin: 4px 0;
+    background-color: rgba(0, 123, 255, 0.1);
+    border: 2px dashed var(--tg-theme-button-color, #007bff);
+    border-radius: 12px;
+}
+
+.tasks-list.drag-over-end {
+    padding-bottom: 76px;
+    background:
+        linear-gradient(to top, rgba(0, 123, 255, 0.1), transparent 68px),
+        repeating-linear-gradient(-45deg,
+            transparent,
+            transparent 5px,
+            rgba(0, 123, 255, 0.1) 5px,
+            rgba(0, 123, 255, 0.1) 10px);
+    transition: padding-bottom 0.2s ease-in-out;
 }

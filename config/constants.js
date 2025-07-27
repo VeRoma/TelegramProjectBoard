@@ -10,28 +10,31 @@ module.exports = {
     },
     // Роли сотрудников, используемые в приложении
     EMPLOYEE_ROLES: {
-        OWNER: 'owner',     // Роль владельца (для получения запросов на регистрацию)
-        USER: 'user',       // Роль обычного пользователя
-        ADMIN: 'admin'      // Роль администратора
+        OWNER: 'owner',       // Роль владельца
+        USER: 'user',         // Роль обычного пользователя
+        ADMIN: 'admin'        // Роль администратора
     },
-    // Названия колонок в листах Google Таблицы, используются для доступа к данным
+    // Названия колонок в листах Google Таблицы
     TASK_COLUMNS: {
-        NAME: 'Наименование',       // Название задачи
-        STATUS: 'Статус',           // Статус задачи
-        RESPONSIBLE: 'Ответственный', // Ответственный(ые) за задачу
-        MESSAGE: 'Сообщение исполнителю', // Сообщение для исполнителя
-        PROJECT: 'Проект',          // Проект, к которому относится задача
-        PRIORITY: 'Приоритет',      // Приоритет задачи
-        VERSION: 'Версия',          // Версия задачи (для оптимистической блокировки)
-        ROW_INDEX: 'rowIndex',      // Индекс строки в таблице (используется для обновления)
-        USER_ID: 'UserID',          // ID пользователя Telegram
-        EMPLOYEE_NAME: 'Имя',       // Имя сотрудника
-        EMPLOYEE_PHONE: 'Номер телефона', // Номер телефона сотрудника
-        EMPLOYEE_ROLE: 'Role',      // Роль сотрудника
-        TIMESTAMP: 'Timestamp',     // Метка времени (для логов)
-        USERNAME: 'Username',       // Имя пользователя Telegram
-        FIRST_NAME: 'FirstName',    // Имя в Telegram
-        LAST_NAME: 'LastName'       // Фамилия в Telegram
+        NAME: 'Наименование',
+        STATUS: 'Статус',
+        RESPONSIBLE: 'Ответственный',
+        MESSAGE: 'Сообщение исполнителю',
+        PROJECT: 'Проект',
+        PRIORITY: 'Приоритет',
+        VERSION: 'Версия',
+        ROW_INDEX: 'rowIndex',
+        USER_ID: 'UserID',
+        EMPLOYEE_NAME: 'Имя',
+        EMPLOYEE_PHONE: 'Номер телефона',
+        EMPLOYEE_ROLE: 'Role',
+        TIMESTAMP: 'Timestamp',
+        USERNAME: 'Username',
+        FIRST_NAME: 'FirstName',
+        LAST_NAME: 'LastName',
+        // --- НОВЫЕ КОЛОНКИ ---
+        MODIFIED_BY: 'Кем изменено',
+        MODIFIED_AT: 'Когда изменено'
     },
     // Шаблоны сообщений для Telegram бота
     TELEGRAM_MESSAGES: {

@@ -1,9 +1,8 @@
-// server.js
 // Загрузка переменных окружения из .env файла
 require('dotenv').config({ override: true });
 
 const express = require('express'); // Импорт фреймворка Express
-const path = require('path');       // Импорт модуля для работы с путями файлов
+const path = require('path');      // Импорт модуля для работы с путями файлов
 
 // Импорт маршрутов для аутентификации и задач
 const authRoutes = require('./routes/authRoutes');
@@ -41,6 +40,19 @@ app.use((req, res, next) => {
 // Все маршруты, определенные в authRoutes и taskRoutes, будут доступны по префиксу '/api'
 app.use('/api', authRoutes); // Маршруты для аутентификации
 app.use('/api', taskRoutes); // Маршруты для работы с задачами
+
+// --- НОВЫЙ БЛОК: ВОССТАНОВЛЕННЫЙ ЭНДПОИНТ ДЛЯ ЛОГОВ ---
+/**
+ * Маршрут для получения логов с клиентской стороны (из браузера).
+ * Это полезно для отладки того, что происходит у пользователя.
+ */
+app.post('/api/log', (req, res) => {
+    const { level = 'INFO', message, context } = req.body;
+    console.log(`[CLIENT ${level}] ${message}`, context || '');
+    // Отправляем статус 204 No Content, так как клиенту не нужен ответ
+    res.sendStatus(204);
+});
+// ----------------------------------------------------
 
 // Централизованный middleware для обработки ошибок
 // Он будет перехватывать ошибки, выброшенные в обработчиках маршрутов или других middleware

@@ -4,57 +4,61 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>Проектная доска</title>
+    <title>Project Board</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="css/styles.css">
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
-    <link rel="stylesheet" href="/css/styles.css">
 </head>
 
-<body class="antialiased overflow-x-hidden">
-    <div id="auth-blocker" class="hidden min-h-screen flex items-center justify-center text-center p-4">
-        <div>
-            <h1 class="text-2xl font-bold">Доступ ограничен</h1>
-            <p class="mt-2 text-gray-600">Пожалуйста, используйте бота в Telegram для доступа к приложению.</p>
-        </div>
-    </div>
-    <div id="app" class="min-h-screen hidden">
-        <header id="app-header" class="header p-4 shadow-sm sticky top-0 z-10">
-            <h1 class="text-xl font-bold">Мои проекты</h1>
-            <p id="greeting-text" class="text-sm"></p>
-            <p id="user-id-text" class="text-xs mt-1" style="color: var(--tg-theme-hint-color, #999999);"></p>
-        </header>
-        <main id="main-content" class="p-4 space-y-4"></main>
-    </div>
-    <div id="fab-button"
-        class="fixed bottom-6 right-6 w-14 h-14 flex items-center justify-center rounded-full shadow-lg cursor-pointer z-20">
-        <div id="fab-icon-container"></div>
-    </div>
-    <div id="registration-modal" class="modal">
-        <div class="modal-content">
-            <div class="p-4 border-b">
-                <h3 class="text-lg font-bold">Регистрация</h3>
-            </div>
-            <div class="modal-body space-y-4">
-                <p>Ваш аккаунт не зарегистрирован в системе. Пожалуйста, введите Ваше имя, чтобы отправить
-                    запрос администратору.</p>
-                <div>
+<body class="overflow-x-hidden">
 
-                    <input type="text" id="name-input" class="details-input mt-1" placeholder="Ваше имя">
-                </div>
+    <div id="app" class="hidden">
+        <header id="app-header" class="p-4">
+            <div id="user-info" class="text-center">
+                <h1 id="greeting-text" class="font-bold">Загрузка...</h1>
+                <p id="user-id-text" class="text-xs" style="color: var(--tg-theme-hint-color);"></p>
             </div>
-            <div class="p-2 border-t flex justify-end">
-                <button id="register-btn" class="modal-select-btn px-4 py-2 rounded-lg">Запросить доступ</button>
+        </header>
+
+        <main id="main-content" class="p-4">
+        </main>
+
+        <button id="fab-button" class="fixed bottom-8 right-5 rounded-full shadow-lg flex items-center justify-center"
+            style="width: 60px; height: 60px; background-color: var(--tg-theme-button-color);">
+            <div id="fab-icon-container" style="color: var(--tg-theme-button-text-color);">
             </div>
+        </button>
+    </div>
+
+    <div id="auth-blocker" class="hidden fixed inset-0 flex items-center justify-center p-4"
+        style="background-color: var(--tg-theme-secondary-bg-color);">
+        <div id="registration-modal" class="modal-content w-full max-w-sm text-center">
+            <h3 class="text-lg font-bold mb-2">Требуется регистрация</h3>
+            <p class="mb-4 text-sm" style="color: var(--tg-theme-hint-color);">Чтобы использовать приложение, вам
+                необходимо получить доступ. Пожалуйста, введите ваше имя и отправьте запрос.</p>
+            <input id="name-input" type="text" placeholder="Ваше имя" class="details-input mb-4">
+            <button id="register-btn" class="w-full px-4 py-2 rounded-lg"
+                style="background-color: var(--tg-theme-button-color); color: var(--tg-theme-button-text-color);">Отправить
+                запрос</button>
         </div>
     </div>
+
     <div id="status-modal" class="modal"></div>
     <div id="employee-modal" class="modal"></div>
     <div id="project-modal" class="modal"></div>
     <div id="add-task-modal" class="modal"></div>
-    <div id="toast-notification"
-        class="fixed bottom-[-100px] left-1/2 -translate-x-1/2 bg-gray-800 text-white px-6 py-3 rounded-full shadow-lg z-50">
+
+    <div id="toast-notification" class="fixed left-1/2 -translate-x-1/2 p-3 rounded-lg shadow-lg text-white"
+        style="background-color: var(--tg-theme-button-color); transition: all 0.5s ease; bottom: -100px; opacity: 0; z-index: 9999;">
     </div>
-    <script type="module" src="/js/main.js"></script>
+
+    <div id="loading-overlay" class="fixed inset-0 z-50 flex items-center justify-center"
+        style="background-color: rgba(0,0,0,0.1); display: none;">
+        <div class="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-gray-900"></div>
+    </div>
+
+    <script src="js/main.js" type="module"></script>
+
 </body>
 
 </html>

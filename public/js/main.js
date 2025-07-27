@@ -1,18 +1,32 @@
 import * as api from './api.js';
-import * as ui from './ui.js';
-// Removed: import { employees } from './data/employees.js';
-
-let allProjects = [];
-let appData = {};
-let allEmployees = []; // New global variable to store employees from server
+import * as render from './ui/render.js';
+import * as modals from './ui/modals.js';
+import * as uiUtils from './ui/utils.js';
+import { STATUSES } from './data/statuses.js'; // Импортируем статусы для сортировки
 
 document.addEventListener('DOMContentLoaded', () => {
+    // --- Глобальные переменные состояния ---
+    let appData = {};
+    let allProjects = [];
+    let allEmployees = [];
+
+    // --- Инициализация Telegram ---
     const tg = window.Telegram.WebApp;
     tg.ready();
 
-    // Removed debugUserId block
-
+    // --- Получение элементов DOM ---
     const mainContainer = document.getElementById('main-content');
+
+    // --- Функции-обработчики (хендлеры) ---
+
+    function getDebugUserId() {
+        const urlParams = new URLSearchParams(window.location.search);
+        return urlParams.get('debug_user_id');
+    }
+
+    function getEmployees() {
+        return allEmployees;
+    }
     
     async function handleSaveActiveTask() {
         const activeEditElement = document.querySelector('.task-details.edit-mode');
@@ -26,68 +40,210 @@ document.addEventListener('DOMContentLoaded', () => {
             name: activeEditElement.querySelector('.task-name-edit').value,
             message: activeEditElement.querySelector('.task-message-edit').value,
             status: activeEditElement.querySelector('.task-status-view').textContent,
+            project: activeEditElement.querySelector('.task-project-view').textContent,
             responsible: selectedEmployees,
             version: parseInt(activeEditElement.dataset.version, 10),
         };
 
         try {
-            api.logAction('Attempting to save task', { rowIndex: updatedTask.rowIndex, name: updatedTask.name });
-            const result = await api.saveTask(updatedTask);
+            const result = await api.saveTask({taskData: updatedTask, modifierName: appData.userName});
             if (result.status === 'success') {
-                ui.showToast('Изменения сохранены');
+                uiUtils.showToast('Изменения сохранены');
                 tg.HapticFeedback.notificationOccurred('success');
+                uiUtils.exitEditMode(activeEditElement);
+                uiUtils.updateFabButtonUI(false, handleSaveActiveTask, handleShowAddTaskModal);
                 
-                ui.exitEditMode(activeEditElement);
-                ui.updateFabButtonUI(false, handleSaveActiveTask, handleShowAddTaskModal);
-
                 const oldTaskData = JSON.parse(activeEditElement.dataset.task);
                 const newTaskData = {...oldTaskData, ...updatedTask, responsible: selectedEmployees.join(', ')};
                 activeEditElement.dataset.task = JSON.stringify(newTaskData).replace(/'/g, '&apos;');
                 activeEditElement.dataset.version = result.newVersion;
             } else {
-                api.logAction('Task save failed', { level: 'WARN', rowIndex: updatedTask.rowIndex, error: result.error });
-                if (result.error.includes("изменены другим пользователем")) {
-                    return tg.showAlert(result.error + '\nТекущие данные будут обновлены.');
+                if (result.error && result.error.includes("изменены другим пользователем")) {
+                    tg.showAlert(result.error + '\nТекущие данные будут обновлены.', () => window.location.reload());
+                } else {
+                    tg.showAlert('Ошибка сохранения: ' + (result.error || 'Неизвестная ошибка'));
                 }
-                tg.showAlert('Ошибка сохранения: ' + (result.error || 'Неизвестная ошибка'));
             }
         } catch (error) {
-            api.logAction('Critical save error', { level: 'ERROR', error: error.message });
             tg.showAlert('Критическая ошибка сохранения: ' + error.message);
         }
     }
 
     function handleShowAddTaskModal() {
-        ui.openAddTaskModal(allProjects, allEmployees);
+        modals.openAddTaskModal(allProjects, allEmployees);
+    }
+
+    async function handleCreateTask(taskData) {
+        const tempRowIndex = `temp_${Date.now()}`;
+        const optimisticTask = { ...taskData, rowIndex: tempRowIndex, version: 0 };
+        let targetProject;
+        if (appData.userRole === 'user') {
+            targetProject = appData.projects.find(p => p.name === appData.userName);
+            if (!targetProject) {
+                targetProject = { name: appData.userName, tasks: [] };
+                appData.projects.push(targetProject);
+            }
+        } else {
+            targetProject = appData.projects.find(p => p.name === optimisticTask.project);
+        }
+        if (targetProject) {
+            targetProject.tasks.push(optimisticTask);
+        } else {
+            const newProject = { name: optimisticTask.project, tasks: [optimisticTask] };
+            appData.projects.push(newProject);
+            if (!allProjects.includes(optimisticTask.project)) {
+                 allProjects.push(optimisticTask.project);
+            }
+        }
+        modals.closeAddTaskModal();
+        render.renderProjects(appData.projects, appData.userName, appData.userRole);
+        uiUtils.showToast('Задача добавлена, сохранение...');
+        tg.HapticFeedback.notificationOccurred('success');
+        try {
+            const result = await api.addTask({newTaskData: taskData, creatorName: appData.userName});
+            if (result.status === 'success' && result.task) {
+                const finalTask = result.task;
+                const projectToUpdate = appData.projects.find(p => p.name === finalTask.project);
+                if (projectToUpdate) {
+                    const taskToUpdate = projectToUpdate.tasks.find(t => t.rowIndex === tempRowIndex);
+                    if (taskToUpdate) {
+                        Object.assign(taskToUpdate, finalTask);
+                    }
+                }
+                render.renderProjects(appData.projects, appData.userName, appData.userRole);
+                uiUtils.showToast('Задача успешно сохранена!');
+            } else {
+                throw new Error(result.error || 'Неизвестная ошибка сервера');
+            }
+        } catch (error) {
+            tg.showAlert(`Не удалось сохранить задачу: ${error.message}. Обновляем список...`);
+            window.location.reload();
+        }
     }
 
     async function handleStatusUpdate(rowIndex, newStatus) {
         const project = appData.projects.find(p => p.tasks.some(t => t.rowIndex == rowIndex));
         if (!project) return;
-
         const task = project.tasks.find(t => t.rowIndex == rowIndex);
         if (!task) return;
-
         const oldStatus = task.status;
         task.status = newStatus;
-
-        // userName will now come from appData
-        ui.renderProjects(appData.projects, appData.userName);
-        ui.showToast('Статус обновлён');
-
+        if (newStatus === 'Выполнено') task.приоритет = 99;
+        render.renderProjects(appData.projects, appData.userName, appData.userRole);
+        uiUtils.showToast('Статус обновлён');
         try {
-            const result = await api.saveTask({ ...task, status: newStatus });
-            if (result.status !== 'success') {
-                throw new Error(result.error || 'Ошибка сохранения на сервере');
-            }
-            api.logAction('Status updated successfully on server');
+            const result = await api.saveTask({taskData: task, modifierName: appData.userName});
+            if (result.status !== 'success') throw new Error(result.error || 'Ошибка сохранения на сервере');
         } catch (error) {
-            api.logAction('Status update failed', { level: 'ERROR', error: error.message });
             tg.showAlert('Не удалось сохранить новый статус. Возвращаем как было.');
             task.status = oldStatus;
-            ui.renderProjects(appData.projects, appData.userName);
+            render.renderProjects(appData.projects, appData.userName, appData.userRole);
         }
     }
+
+    // --- ИСПРАВЛЕННАЯ ФУНКЦИЯ DRAG-N-DROP ---
+    function handleDragDrop(projectName, updatedTaskIdsInGroup) {
+        const projectData = appData.projects.find(p => p.name === projectName);
+        if (!projectData) return;
+
+        const taskMap = new Map(projectData.tasks.map(t => [t.rowIndex.toString(), t]));
+
+        // Пересчитываем приоритеты от 1 до N только для задач в измененной группе
+        const tasksToUpdate = updatedTaskIdsInGroup.map((id, index) => {
+            const task = taskMap.get(id);
+            if (task) {
+                task.приоритет = index + 1;
+                return {
+                    rowIndex: task.rowIndex,
+                    приоритет: task.приоритет
+                };
+            }
+        }).filter(Boolean);
+
+        // Сразу перерисовываем интерфейс с новым локальным порядком
+        render.renderProjects(appData.projects, appData.userName, appData.userRole);
+        uiUtils.showToast('Сохранение нового порядка...');
+        
+        // Отправляем на сервер только измененные задачи
+        api.updatePriorities({tasks: tasksToUpdate, modifierName: appData.userName})
+            .then(result => {
+                if (result.status === 'success') {
+                    uiUtils.showToast('Новый порядок сохранён');
+                } else {
+                    throw new Error(result.error || 'Неизвестная ошибка сервера');
+                }
+            })
+            .catch(error => {
+                window.Telegram.WebApp.showAlert('Не удалось сохранить новый порядок задач: ' + error.message);
+                window.location.reload(); // В случае ошибки - откатываемся
+            });
+    }
+
+    // --- Установка обработчиков событий ---
+    mainContainer.addEventListener('click', async (event) => {
+        const statusActionArea = event.target.closest('.status-action-area');
+        if (statusActionArea) {
+            const taskCard = statusActionArea.closest('[data-task-id]');
+            const detailsContainer = taskCard.querySelector('.task-details');
+            if (!detailsContainer.innerHTML) render.renderTaskDetails(detailsContainer);
+            modals.openStatusModal(detailsContainer);
+            return;
+        }
+        const editBtn = event.target.closest('.edit-btn');
+        if (editBtn) {
+            const detailsContainer = editBtn.closest('.task-details');
+            const currentlyEditing = document.querySelector('.task-details.edit-mode');
+            if (currentlyEditing && currentlyEditing !== detailsContainer) {
+                await handleSaveActiveTask();
+            }
+            const backButtonHandler = () => {
+                uiUtils.exitEditMode(detailsContainer);
+                uiUtils.updateFabButtonUI(false, handleSaveActiveTask, handleShowAddTaskModal);
+            };
+            uiUtils.enterEditMode(detailsContainer, backButtonHandler);
+            uiUtils.updateFabButtonUI(true, handleSaveActiveTask, handleShowAddTaskModal);
+            return;
+        }
+        const modalTrigger = event.target.closest('.modal-trigger-field');
+        if (modalTrigger) {
+            const modalType = modalTrigger.dataset.modalType;
+            const activeTaskDetailsElement = modalTrigger.closest('.task-details');
+            if (modalType === 'status') modals.openStatusModal(activeTaskDetailsElement);
+            else if (modalType === 'employee') modals.openEmployeeModal(activeTaskDetailsElement, getEmployees());
+            else if (modalType === 'project') modals.openProjectModal(activeTaskDetailsElement, allProjects);
+            return;
+        }
+        const taskHeader = event.target.closest('.task-header');
+        if (taskHeader) {
+            if (event.target.closest('.status-action-area')) return;
+            const detailsContainer = taskHeader.nextElementSibling;
+            const currentlyOpen = document.querySelector('.task-details.expanded');
+            
+            if (currentlyOpen && currentlyOpen !== detailsContainer) {
+                currentlyOpen.classList.remove('expanded');
+                setTimeout(() => { currentlyOpen.innerHTML = ''; }, 300);
+            }
+            if (!detailsContainer.innerHTML) render.renderTaskDetails(detailsContainer);
+            detailsContainer.classList.toggle('expanded');
+            if (!detailsContainer.classList.contains('expanded')) {
+                setTimeout(() => { detailsContainer.innerHTML = ''; }, 300);
+            }
+            return;
+        }
+        const projectHeader = event.target.closest('.project-header');
+        if (projectHeader) {
+            projectHeader.nextElementSibling.classList.toggle('expanded');
+        }
+    });
+
+    let draggedElement = null;
+    mainContainer.addEventListener('dragstart', (e) => {
+        const draggableCard = e.target.closest('[draggable="true"]');
+        if (!draggableCard) return;
+        uiUtils.hideFab();
+        draggedElement = draggableCard;
+        setTimeout(() => { draggedElement.classList.add('dragging'); }, 0);
+    });
 
     function getDragAfterElement(container, y) {
         const draggableElements = [...container.querySelectorAll('[draggable="true"]:not(.dragging)')];
@@ -95,230 +251,139 @@ document.addEventListener('DOMContentLoaded', () => {
             const box = child.getBoundingClientRect();
             const offset = y - box.top - box.height / 2;
             if (offset < 0 && offset > closest.offset) {
-                return { offset: offset, element: child };
-            } else {
-                return closest;
+                return { offset, element: child };
             }
+            return closest;
         }, { offset: Number.NEGATIVE_INFINITY }).element;
     }
 
-    mainContainer.addEventListener('click', async (event) => {
-    const statusActionArea = event.target.closest('.status-action-area');
-    if (statusActionArea) {
-        const taskCard = statusActionArea.closest('[data-task-id]');
-        const detailsContainer = taskCard.querySelector('.task-details');
-        if (!detailsContainer.innerHTML) {
-            ui.renderTaskDetails(detailsContainer);
-        }
-        ui.openStatusModal(detailsContainer);
-        return;
-    }
-
-    const editBtn = event.target.closest('.edit-btn');
-    if (editBtn) {
-        const detailsContainer = editBtn.closest('.task-details');
-        const currentlyEditing = document.querySelector('.task-details.edit-mode');
-        if (currentlyEditing && currentlyEditing !== detailsContainer) {
-            await handleSaveActiveTask();
-        }
-        const backButtonHandler = () => {
-            ui.exitEditMode(detailsContainer);
-            ui.updateFabButtonUI(false, handleSaveActiveTask, handleShowAddTaskModal);
-        };
-        ui.enterEditMode(detailsContainer, backButtonHandler);
-        ui.updateFabButtonUI(true, handleSaveActiveTask, handleShowAddTaskModal);
-        return;
-    }
-    
-    const modalTrigger = event.target.closest('.modal-trigger-field');
-    if (modalTrigger) {
-        const modalType = modalTrigger.dataset.modalType;
-        const activeTaskDetailsElement = modalTrigger.closest('.task-details');
-        if (modalType === 'status') {
-            ui.openStatusModal(activeTaskDetailsElement);
-        } else if (modalType === 'employee') {
-            ui.openEmployeeModal(activeTaskDetailsElement);
-        } else if (modalType === 'project') {
-            ui.openProjectModal(activeTaskDetailsElement, allProjects);
-        }
-        return;
-    }
-
-    const taskHeader = event.target.closest('.task-header');
-    if (taskHeader) {
-        if (event.target.closest('.status-action-area')) {
-            return;
-        }
-        
-        const detailsContainer = taskHeader.nextElementSibling;
-
-        const currentlyOpen = document.querySelector('.task-details.expanded');
-        if (currentlyOpen && currentlyOpen !== detailsContainer) {
-            currentlyOpen.classList.remove('expanded');
-            setTimeout(() => {
-                currentlyOpen.innerHTML = '';
-            }, 300);
-        }
-
-        if (!detailsContainer.innerHTML) {
-            ui.renderTaskDetails(detailsContainer);
-        }
-        
-        detailsContainer.classList.toggle('expanded');
-
-        if (detailsContainer.classList.contains('expanded')) {
-            detailsContainer.addEventListener('transitionend', () => {
-                detailsContainer.scrollIntoView({
-                    behavior: 'smooth',
-                    block: 'nearest'
-                });
-            }, { once: true });
-        } else {
-            setTimeout(() => {
-                detailsContainer.innerHTML = '';
-            }, 300);
-        }
-        return;
-    }
-
-    const projectHeader = event.target.closest('.project-header');
-    if (projectHeader) {
-        const targetList = projectHeader.nextElementSibling;
-        targetList.classList.toggle('expanded');
-        if (targetList.classList.contains('expanded')) {
-            setTimeout(() => projectHeader.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50);
-        }
-        return;
-    }
-});
-
-    let draggedElement = null;
-    mainContainer.addEventListener('dragstart', (e) => {
-        const draggableCard = e.target.closest('[draggable="true"]');
-        if (!draggableCard) return;
-        ui.hideFab();
-        draggedElement = draggableCard;
-        setTimeout(() => { draggedElement.classList.add('dragging'); }, 0);
-    });
-
     mainContainer.addEventListener('dragover', (e) => {
         e.preventDefault();
-        const container = e.target.closest('#projects-container, .tasks-list');
+        if (!draggedElement) return;
+        const dragGroup = draggedElement.dataset.statusGroup;
+        const container = e.target.closest(`.tasks-list[data-status-group="${dragGroup}"]`);
+        
+        document.querySelectorAll('.drag-over, .drag-over-end').forEach(el => {
+            el.classList.remove('drag-over', 'drag-over-end');
+        });
         if (!container) return;
         const afterElement = getDragAfterElement(container, e.clientY);
-        container.querySelectorAll('[draggable="true"]').forEach(el => el.classList.remove('drag-over'));
-        if (afterElement) afterElement.classList.add('drag-over');
+        
+        if (afterElement) {
+            afterElement.classList.add('drag-over');
+        } else {
+            container.classList.add('drag-over-end');
+        }
     });
-    
+
     mainContainer.addEventListener('drop', (e) => {
         e.preventDefault();
-        const dropTarget = e.target.closest('[draggable="true"]');
-        if (!draggedElement || !dropTarget) return;
-        const container = dropTarget.parentElement;
-        const fromIndex = Array.from(container.children).indexOf(draggedElement);
-        const toIndex = Array.from(container.children).indexOf(dropTarget);
+        if (!draggedElement) return;
+        
+        const dropContainer = e.target.closest(`.tasks-list[data-status-group="${draggedElement.dataset.statusGroup}"]`);
+        if (!dropContainer) {
+             mainContainer.dispatchEvent(new Event('dragend'));
+             return;
+        };
+        const afterElement = getDragAfterElement(dropContainer, e.clientY);
+        if (afterElement) {
+            dropContainer.insertBefore(draggedElement, afterElement);
+        } else {
+            dropContainer.appendChild(draggedElement);
+        }
         const projectElement = draggedElement.closest('.card').querySelector('.project-header h2');
-        const projectName = projectElement ? projectElement.textContent : appData.userName; // Use appData.userName now
-        const projectData = appData.projects.find(p => p.name === projectName);
-        if (!projectData) return;
-        const [removed] = projectData.tasks.splice(fromIndex, 1);
-        projectData.tasks.splice(toIndex, 0, removed);
-        projectData.tasks.forEach((task, index) => { task.приоритет = index + 1; });
-        ui.renderProjects(appData.projects, appData.userName); // Use appData.userName now
-        ui.showFab();
-        api.updatePriorities(projectData.tasks).then(result => {
-            if (result.status === 'success') { ui.showToast('Новый порядок сохранён'); } 
-            else { throw new Error(result.error || 'Неизвестная ошибка сервера'); }
-        }).catch(error => {
-            tg.showAlert('Не удалось сохранить новый порядок задач: ' + error.message);
-            initializeApp(); 
-        });
+        const projectName = projectElement ? projectElement.textContent : appData.userName;
+        const tasksInGroup = Array.from(dropContainer.querySelectorAll('[draggable="true"]'));
+        const updatedTaskIds = tasksInGroup.map(card => card.dataset.taskId);
+        handleDragDrop(projectName, updatedTaskIds);
     });
 
     mainContainer.addEventListener('dragend', () => {
-        ui.showFab();
-        if (draggedElement) draggedElement.classList.remove('dragging');
-        mainContainer.querySelectorAll('.drag-over').forEach(el => el.classList.remove('drag-over'));
+        if (draggedElement) {
+            draggedElement.classList.remove('dragging');
+        }
+        document.querySelectorAll('.drag-over, .drag-over-end').forEach(el => {
+            el.classList.remove('drag-over', 'drag-over-end');
+        });
         draggedElement = null;
+        uiUtils.showFab();
     });
 
     document.getElementById('register-btn').addEventListener('click', async () => {
         const nameInput = document.getElementById('name-input');
         const name = nameInput.value.trim();
         const user = tg.initDataUnsafe.user;
-
         if (!name) {
             tg.showAlert('Пожалуйста, введите ваше имя.');
             return;
         }
-
         try {
-            api.logAction('Registration request initiated', { name });
             const result = await api.requestRegistration(name, user.id);
             if (result.status === 'request_sent') {
                 document.getElementById('registration-modal').classList.remove('active');
-                tg.showAlert('Ваш запрос на регистрацию отправлен администратору. Вы получите уведомление после одобрения.');
+                tg.showAlert('Ваш запрос на регистрацию отправлен администратору.');
                 tg.close();
             } else {
                 throw new Error(result.error || 'Неизвестная ошибка');
             }
         } catch(error) {
-            api.logAction('Registration request failed', { level: 'ERROR', name, error: error.message });
             tg.showAlert('Ошибка отправки запроса: ' + error.message);
         }
     });
 
+    // --- Главная функция инициализации ---
     async function initializeApp() {
-        api.logAction('App initializing');
-        const user = tg.initDataUnsafe.user;
-
+        let user;
+        const debugUserId = getDebugUserId();
+        if (debugUserId) {
+            user = { id: debugUserId, first_name: 'Debug', username: 'debuguser' };
+        } else {
+            user = tg.initDataUnsafe?.user;
+        }
         if (!user || !user.id) {
-            api.logAction('Access denied: no user data', { level: 'WARN' });
-            ui.showAccessDeniedScreen();
+            uiUtils.showAccessDeniedScreen();
             return;
         }
-
+        window.currentUserId = user.id;
         try {
-            ui.showLoading();
-            api.logAction('Verifying user', { userId: user.id });
+            uiUtils.showLoading();
             const verification = await api.verifyUser(user);
-
             if (verification.status === 'authorized') {
-                ui.setupUserInfo(verification.name);
-                api.logAction('User authorized, loading app data', { userId: user.id, name: verification.name });
+                uiUtils.setupUserInfo(verification.name);
                 const data = await api.loadAppData({ user });
                 if (data && data.projects) {
-                    appData = data; 
+                    appData = data;
                     allProjects = data.allProjects || [];
                     allEmployees = data.allEmployees || [];
-                    ui.renderProjects(data.projects, data.userName);
-                    data.projects.forEach(p => p.tasks.forEach(t => {
-                        const taskElement = document.getElementById(`task-details-${t.rowIndex}`);
-                        if (taskElement) taskElement.dataset.version = t.version;
-                        else console.warn(`Не удалось найти элемент для задачи с rowIndex: ${t.rowIndex}`);
-                    }));
+                    render.renderProjects(data.projects, data.userName, data.userRole);
+                    document.querySelectorAll('.task-details').forEach(el => {
+                        const rowIndex = el.id.split('-')[2];
+                        const project = data.projects.find(p => p.tasks.some(t => t.rowIndex == rowIndex));
+                        if (project) {
+                            const task = project.tasks.find(t => t.rowIndex == rowIndex);
+                            if (task) {
+                                el.dataset.version = task.version;
+                                el.dataset.task = JSON.stringify(task).replace(/'/g, '&apos;');
+                            }
+                        }
+                    });
                 } else {
-                    api.logAction('No projects data received', { userId: user.id, name: verification.name });
-                    ui.renderProjects([], verification.name); 
+                    render.renderProjects([], verification.name, verification.role);
                 }
             } else if (verification.status === 'unregistered') {
-                api.logAction('User is unregistered', { userId: user.id });
-                ui.showRegistrationModal();
+                uiUtils.showRegistrationModal();
             } else {
-                api.logAction('Unknown verification status', { level: 'ERROR', userId: user.id, status: verification.status, error: verification.error });
                 throw new Error(verification.error || 'Неизвестный статус верификации');
             }
         } catch (error) {
-            api.logAction('App initialization failed', { level: 'ERROR', error: error.message });
-            if (error instanceof TypeError && error.message.includes("Unexpected token")) {
-                ui.showDataLoadError(new Error("Сервер временно недоступен. Пожалуйста, попробуйте обновить страницу позже."));
-            } else {
-                ui.showDataLoadError(error);
-            }
+            uiUtils.showDataLoadError(error);
+        } finally {
+            uiUtils.hideLoading();
         }
     }
     
-    ui.setupModals(handleStatusUpdate); 
-    ui.updateFabButtonUI(false, handleSaveActiveTask, handleShowAddTaskModal);
+    // --- Запуск приложения ---
+    modals.setupModals(handleStatusUpdate, handleCreateTask, getEmployees);
+    uiUtils.updateFabButtonUI(false, handleSaveActiveTask, handleShowAddTaskModal);
     initializeApp();
 });
