@@ -120,20 +120,10 @@ const addTaskToSheet = async (newTaskData, creatorName) => {
 
 const updateTaskPrioritiesInSheet = async (updatedTasks, modifierName) => {
     const tasksSheet = await getSheet(SHEET_NAMES.TASKS);
-    await tasksSheet.loadHeaderRow();
     
-    const priorityColumnIndex = tasksSheet.headerValues.indexOf(TASK_COLUMNS.PRIORITY);
-    const modifiedByColumnIndex = tasksSheet.headerValues.indexOf(TASK_COLUMNS.MODIFIED_BY);
-    const modifiedAtColumnIndex = tasksSheet.headerValues.indexOf(TASK_COLUMNS.MODIFIED_AT);
-
-    if (priorityColumnIndex === -1) {
-        throw new Error(`Колонка с названием "${TASK_COLUMNS.PRIORITY}" не найдена.`);
-    }
-    
-    // Загружаем все строки, чтобы создать карту для быстрого доступа
     const rows = await tasksSheet.getRows();
     const rowMap = new Map(rows.map(row => [row.get(TASK_COLUMNS.ROW_INDEX).toString(), row]));
-    
+
     const now = new Date().toLocaleString('ru-RU');
     let modified = false;
 
@@ -141,19 +131,15 @@ const updateTaskPrioritiesInSheet = async (updatedTasks, modifierName) => {
         const rowToUpdate = rowMap.get(task.rowIndex.toString());
         if (rowToUpdate) {
             rowToUpdate.set(TASK_COLUMNS.PRIORITY, task.приоритет);
-            if (modifiedByColumnIndex > -1) {
-                rowToUpdate.set(TASK_COLUMNS.MODIFIED_BY, modifierName);
-            }
-            if (modifiedAtColumnIndex > -1) {
-                rowToUpdate.set(TASK_COLUMNS.MODIFIED_AT, now);
-            }
+            rowToUpdate.set(TASK_COLUMNS.MODIFIED_BY, modifierName);
+            rowToUpdate.set(TASK_COLUMNS.MODIFIED_AT, now);
             modified = true;
         }
     }
     
     if (modified) {
-        // Сохраняем только те строки, которые действительно были изменены
-        await tasksSheet.saveUpdatedCells(rows.filter(row => row.isModified()));
+        const modifiedRows = rows.filter(row => row.isModified());
+        await tasksSheet.saveUpdatedCells(modifiedRows);
     }
 };
 

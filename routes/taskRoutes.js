@@ -12,7 +12,6 @@ router.post('/appdata', async (req, res) => {
         if (!user || !user.id) {
             return res.status(400).json({ error: ERROR_MESSAGES.USER_OBJECT_REQUIRED });
         }
-
         const currentUserRecord = await googleSheetsService.getEmployeeById(user.id);
         if (!currentUserRecord) {
             return res.status(401).json({ error: ERROR_MESSAGES.UNAUTHORIZED_USER_NOT_FOUND });
@@ -20,17 +19,12 @@ router.post('/appdata', async (req, res) => {
 
         const userName = currentUserRecord.get(TASK_COLUMNS.EMPLOYEE_NAME);
         const userRole = currentUserRecord.get(TASK_COLUMNS.EMPLOYEE_ROLE);
-
         let projects = {};
         let tasksToProcess = [];
 
         if (userRole === EMPLOYEE_ROLES.USER) {
             const userSheet = await googleSheetsService.getSheet(userName).catch(() => null);
-            if (userSheet) {
-                tasksToProcess = await userSheet.getRows();
-            } else {
-                console.warn(`Sheet "${userName}" for user ${user.id} not found.`);
-            }
+            if (userSheet) tasksToProcess = await userSheet.getRows();
         } else {
             tasksToProcess = await googleSheetsService.getTasks();
         }
@@ -42,15 +36,16 @@ router.post('/appdata', async (req, res) => {
             if (!projects[projectName]) {
                 projects[projectName] = { name: projectName, tasks: [] };
             }
+            // --- ГАРАНТИРУЕМ, ЧТО ВСЕ КЛЮЧЕВЫЕ ПОЛЯ - ЧИСЛА ---
             projects[projectName].tasks.push({
                 name: row.get(TASK_COLUMNS.NAME),
                 status: row.get(TASK_COLUMNS.STATUS),
                 responsible: row.get(TASK_COLUMNS.RESPONSIBLE),
                 message: row.get(TASK_COLUMNS.MESSAGE),
-                version: parseInt(row.get(TASK_COLUMNS.VERSION) || 0),
-                rowIndex: row.get(TASK_COLUMNS.ROW_INDEX) || row.rowNumber,
+                version: parseInt(row.get(TASK_COLUMNS.VERSION) || 0, 10),
+                rowIndex: parseInt(row.get(TASK_COLUMNS.ROW_INDEX) || row.rowNumber, 10),
                 project: projectName,
-                приоритет: parseInt(row.get(TASK_COLUMNS.PRIORITY) || 99),
+                приоритет: parseInt(row.get(TASK_COLUMNS.PRIORITY), 10) || 99,
                 modifiedBy: row.get(TASK_COLUMNS.MODIFIED_BY),
                 modifiedAt: row.get(TASK_COLUMNS.MODIFIED_AT)
             });
@@ -60,13 +55,7 @@ router.post('/appdata', async (req, res) => {
         const allProjects = [...new Set(allProjectsFromData.map(r => r.get(TASK_COLUMNS.PROJECT)).filter(Boolean))];
         const allEmployees = await googleSheetsService.getAllEmployees();
         
-        res.status(200).json({ 
-            projects: Object.values(projects), 
-            allProjects, 
-            userName, 
-            userRole, 
-            allEmployees 
-        });
+        res.status(200).json({ projects: Object.values(projects), allProjects, userName, userRole, allEmployees });
     } catch (error) {
         console.error('Error in /api/appdata:', error);
         res.status(500).json({ error: error.message });
@@ -75,8 +64,7 @@ router.post('/appdata', async (req, res) => {
 
 router.post('/updatetask', async (req, res) => {
     try {
-        // Получаем и задачу, и имя того, кто вносит изменения
-        const { taskData, modifierName } = req.body; 
+        const { taskData, modifierName } = req.body;
         if (!taskData || !modifierName) {
             return res.status(400).json({ error: 'Неполные данные для обновления задачи' });
         }
@@ -113,7 +101,6 @@ router.post('/addtask', async (req, res) => {
             return res.status(400).json({ error: 'Неполные данные для создания задачи' });
         }
         const newRow = await googleSheetsService.addTaskToSheet(newTaskData, creatorName);
-
         if (newTaskData.responsibleUserIds && newTaskData.creatorId) {
             newTaskData.responsibleUserIds.forEach(userId => {
                 if (userId !== newTaskData.creatorId) {
@@ -121,20 +108,18 @@ router.post('/addtask', async (req, res) => {
                 }
             });
         }
-        
         const responseTask = {
             name: newRow.get(TASK_COLUMNS.NAME),
             project: newRow.get(TASK_COLUMNS.PROJECT),
             status: newRow.get(TASK_COLUMNS.STATUS),
             responsible: newRow.get(TASK_COLUMNS.RESPONSIBLE),
             message: newRow.get(TASK_COLUMNS.MESSAGE),
-            приоритет: newRow.get(TASK_COLUMNS.PRIORITY),
-            version: newRow.get(TASK_COLUMNS.VERSION),
-            rowIndex: newRow.get(TASK_COLUMNS.ROW_INDEX),
+            приоритет: parseInt(newRow.get(TASK_COLUMNS.PRIORITY), 10) || 99,
+            version: parseInt(newRow.get(TASK_COLUMNS.VERSION), 10) || 0,
+            rowIndex: parseInt(newRow.get(TASK_COLUMNS.ROW_INDEX), 10) || newRow.rowNumber,
             modifiedBy: newRow.get(TASK_COLUMNS.MODIFIED_BY),
             modifiedAt: newRow.get(TASK_COLUMNS.MODIFIED_AT)
         };
-
         res.status(200).json({ status: 'success', task: responseTask });
     } catch (error) {
         console.error('Error in /api/addtask:', error);
