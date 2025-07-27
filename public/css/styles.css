@@ -107,10 +107,13 @@ body {
     align-items: center;
     justify-content: center;
     padding: 1rem;
+    opacity: 0;
+    transition: opacity 0.2s ease-in-out;
 }
 
 .modal.active {
     display: flex;
+    opacity: 1;
 }
 
 .modal-content {
@@ -137,9 +140,21 @@ body {
     overflow-y: auto;
 }
 
+/* --- ИСПРАВЛЕНИЕ ЗДЕСЬ --- */
 #toast-notification {
-    transition: opacity 0.3s ease-in-out, transform 0.3s ease-in-out;
+    /* Начальное состояние: скрыто под экраном и невидимо */
+    bottom: -100px;
+    opacity: 0;
+    transition: opacity 0.3s ease-in-out, bottom 0.3s ease-in-out;
 }
+
+/* Стиль, который JavaScript будет добавлять для показа */
+#toast-notification.show {
+    bottom: 1.5rem;
+    opacity: 1;
+}
+
+/* -------------------------- */
 
 .edit-container {
     background-color: var(--tg-theme-bg-color, #ffffff);
@@ -269,8 +284,6 @@ body[style*="--tg-color-scheme: dark"] .task-status-checker {
 .toggle-option:not(:last-child) {
     border-right: 1px solid var(--tg-theme-hint-color, #cccccc);
 }
-
-/* --- Стили для Drag-n-Drop --- */
 
 .task-card-container.dragging {
     opacity: 0.4;
