@@ -46,7 +46,7 @@ export function updatePriorities(tasks) {
     return fetch('/api/updatepriorities', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ tasks })
+        body: JSON.stringify(tasks)
     }).then(res => res.json());
 }
 

@@ -132,20 +132,28 @@ export function handleDragDrop(projectName, updatedTaskIdsInGroup) {
 
     const taskMap = new Map(projectData.tasks.map(t => [t.rowIndex.toString(), t]));
 
-    // 1. Создаем новый, отсортированный массив задач ТОЛЬКО для измененной группы
+    // 1. Создаем новый, отсортированный пользователем, массив задач для измененной группы
     const reorderedGroup = updatedTaskIdsInGroup.map(id => taskMap.get(id));
+    const modifiedStatus = reorderedGroup.length > 0 ? reorderedGroup[0].status : null;
 
-    // 2. Получаем все остальные задачи, которые не были затронуты
-    const untouchedTasks = projectData.tasks.filter(t => !updatedTaskIdsInGroup.includes(t.rowIndex.toString()));
-    
-    // 3. Собираем полный список и сортируем его по статусам, чтобы группы не смешались
-    const fullSortedTasks = [...untouchedTasks, ...reorderedGroup].sort((a, b) => {
-        const orderA = (STATUSES.find(s => s.name === a.status) || { order: 99 }).order;
-        const orderB = (STATUSES.find(s => s.name === b.status) || { order: 99 }).order;
-        return orderA - orderB;
-    });
+    // 2. Группируем все задачи проекта по статусам
+    const tasksByStatus = projectData.tasks.reduce((acc, task) => {
+        const status = task.status;
+        if (!acc[status]) acc[status] = [];
+        acc[status].push(task);
+        return acc;
+    }, {});
 
-    // 4. Пересчитываем глобальные приоритеты для ВСЕХ задач проекта от 1 до N
+    // 3. Заменяем старый массив задач в измененном статусе на новый, отсортированный
+    if (modifiedStatus) {
+        tasksByStatus[modifiedStatus] = reorderedGroup;
+    }
+
+    // 4. Собираем единый массив задач, отсортированный по порядку статусов, а внутри - по новому порядку пользователя
+    const sortedStatusKeys = Object.keys(tasksByStatus).sort((a, b) => (STATUSES.find(s => s.name === a) || { order: 99 }).order - (STATUSES.find(s => s.name === b) || { order: 99 }).order);
+    const fullSortedTasks = sortedStatusKeys.flatMap(status => tasksByStatus[status] || []);
+
+    // 5. Пересчитываем глобальные приоритеты для ВСЕХ задач проекта от 1 до N
     const tasksToUpdate = fullSortedTasks.map((task, index) => {
         task.приоритет = index + 1; // Обновляем приоритет в локальных данных
         return {
@@ -154,14 +162,14 @@ export function handleDragDrop(projectName, updatedTaskIdsInGroup) {
         };
     });
 
-    // 5. Сохраняем полностью отсортированный массив в наше локальное состояние
+    // 6. Сохраняем полностью отсортированный массив в наше локальное состояние
     projectData.tasks = fullSortedTasks;
     
-    // 6. Сразу перерисовываем интерфейс с новым порядком
+    // 7. Сразу перерисовываем интерфейс с новым порядком
     render.renderProjects(appData.projects, appData.userName, appData.userRole);
     uiUtils.showToast('Сохранение нового порядка...');
     
-    // 7. Отправляем на сервер ПОЛНЫЙ список задач с новыми приоритетами
+    // 8. Отправляем на сервер ПОЛНЫЙ список задач с новыми приоритетами
     api.updatePriorities({tasks: tasksToUpdate, modifierName: appData.userName})
         .then(result => {
             if (result.status === 'success') {

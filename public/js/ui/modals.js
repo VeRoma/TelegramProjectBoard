@@ -45,9 +45,6 @@ export function openAddTaskModal(allProjects, allEmployees) {
     document.body.classList.add('overflow-hidden');
     const tg = window.Telegram.WebApp;
     const projectsOptions = allProjects.map(p => `<option value="${p}">${p}</option>`).join('');
-    const userEmployees = allEmployees.filter(e => e.role === 'user');
-    const employeesCheckboxes = userEmployees.map(e => `<label class="flex items-center space-x-3 p-3 rounded-md hover:bg-gray-200"><input type="checkbox" value="${e.name}" class="employee-checkbox w-4 h-4 rounded"><span>${e.name}</span></label>`).join('');
-    
     addTaskModal.innerHTML = `
         <div class="modal-content">
             <div class="p-4 border-b">
@@ -64,7 +61,6 @@ export function openAddTaskModal(allProjects, allEmployees) {
                     </div>
                 </div>
                 <div><label class="text-xs font-medium text-gray-500">Сообщение исполнителю</label><textarea id="new-task-message" rows="3" class="details-input mt-1"></textarea></div>
-                <div><label class="text-xs font-medium text-gray-500">Ответственные</label><div class="modal-body-employee mt-1 border rounded-md p-2">${employeesCheckboxes}</div></div>
             </div>
             <div class="p-2 border-t flex justify-end">
                 <button id="add-task-create-btn" class="modal-select-btn px-4 py-2 rounded-lg">Создать</button>
@@ -130,29 +126,23 @@ export function setupModals(onStatusChange, onCreateTask, getEmployeesCallback) 
                 const taskName = document.getElementById('new-task-name').value;
                 const projectName = document.getElementById('new-task-project').value;
                 const message = document.getElementById('new-task-message').value;
-                const responsibleCheckboxes = document.querySelectorAll('#add-task-modal .employee-checkbox:checked');
-                const responsibleNames = [...responsibleCheckboxes].map(cb => cb.value);
                 const activeStatusElement = document.querySelector('#new-task-status-toggle .toggle-option.active');
                 const status = activeStatusElement ? activeStatusElement.dataset.status : 'В работе';
 
-                if (!taskName || !projectName || responsibleNames.length === 0) {
-                    window.Telegram.WebApp.showAlert('Пожалуйста, заполните все поля: Название, Проект и Ответственный.');
+                if (!taskName || !projectName) {
+                    window.Telegram.WebApp.showAlert('Пожалуйста, заполните поля: Название и Проект.');
                     return;
                 }
-                
-                const allEmployees = getEmployeesCallback();
-                const responsibleUsers = allEmployees.filter(emp => responsibleNames.includes(emp.name));
-                const responsibleUserIds = responsibleUsers.map(emp => emp.userId);
 
                 onCreateTask({
                     name: taskName,
                     project: projectName,
                     status: status,
-                    responsible: responsibleNames.join(', '),
+                    responsible: '',
                     message: message,
                     приоритет: 99,
                     creatorId: window.currentUserId,
-                    responsibleUserIds: responsibleUserIds
+                    responsibleUserIds: []
                 });
             }
         });
