@@ -10,6 +10,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const tg = window.Telegram.WebApp;
     const mainContainer = document.getElementById('main-content');
     
+    // --- Установка основного обработчика событий на клики ---
+    
     mainContainer.addEventListener('click', async (event) => {
         const statusActionArea = event.target.closest('.status-action-area');
         if (statusActionArea) {
@@ -19,6 +21,7 @@ document.addEventListener('DOMContentLoaded', () => {
             modals.openStatusModal(detailsContainer);
             return;
         }
+
         const editBtn = event.target.closest('.edit-btn');
         if (editBtn) {
             const detailsContainer = editBtn.closest('.task-details');
@@ -34,6 +37,7 @@ document.addEventListener('DOMContentLoaded', () => {
             uiUtils.updateFabButtonUI(true, handlers.handleSaveActiveTask, handlers.handleShowAddTaskModal);
             return;
         }
+        
         const modalTrigger = event.target.closest('.modal-trigger-field');
         if (modalTrigger) {
             const modalType = modalTrigger.dataset.modalType;
@@ -43,6 +47,7 @@ document.addEventListener('DOMContentLoaded', () => {
             else if (modalType === 'project') modals.openProjectModal(activeTaskDetailsElement, handlers.allProjects);
             return;
         }
+
         const taskHeader = event.target.closest('.task-header');
         if (taskHeader) {
             if (event.target.closest('.status-action-area')) return;
@@ -53,19 +58,23 @@ document.addEventListener('DOMContentLoaded', () => {
                 currentlyOpen.classList.remove('expanded');
                 setTimeout(() => { currentlyOpen.innerHTML = ''; }, 300);
             }
+
             if (!detailsContainer.innerHTML) render.renderTaskDetails(detailsContainer);
             detailsContainer.classList.toggle('expanded');
+
             if (!detailsContainer.classList.contains('expanded')) {
                 setTimeout(() => { detailsContainer.innerHTML = ''; }, 300);
             }
             return;
         }
+
         const projectHeader = event.target.closest('.project-header');
         if (projectHeader) {
             projectHeader.nextElementSibling.classList.toggle('expanded');
         }
     });
 
+    // --- Логика Drag-n-Drop ---
     let draggedElement = null;
 
     mainContainer.addEventListener('dragstart', (e) => {
@@ -124,10 +133,14 @@ document.addEventListener('DOMContentLoaded', () => {
         } else {
             dropContainer.appendChild(draggedElement);
         }
-        const projectElement = draggedElement.closest('.card').querySelector('.project-header h2');
-        const projectName = projectElement ? projectElement.textContent : appData.userName;
+        
+        const taskDataString = draggedElement.querySelector('.task-details').dataset.task;
+        const taskData = JSON.parse(taskDataString.replace(/&apos;/g, "'"));
+        const projectName = taskData.project;
+
         const tasksInGroup = Array.from(dropContainer.querySelectorAll('[draggable="true"]'));
         const updatedTaskIds = tasksInGroup.map(card => card.dataset.taskId);
+        
         handlers.handleDragDrop(projectName, updatedTaskIds);
     });
 
@@ -142,6 +155,7 @@ document.addEventListener('DOMContentLoaded', () => {
         uiUtils.showFab();
     });
 
+    // --- Логика регистрации ---
     document.getElementById('register-btn').addEventListener('click', async () => {
         const nameInput = document.getElementById('name-input');
         const name = nameInput.value.trim();
@@ -164,6 +178,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
+    // --- Запуск приложения ---
     async function startApp() {
         const initialData = await auth.initializeApp();
         if (initialData) {

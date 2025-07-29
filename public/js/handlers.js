@@ -26,7 +26,7 @@ export async function handleSaveActiveTask() {
 
     const responsibleText = activeEditElement.querySelector('.task-responsible-view').textContent;
     const selectedEmployees = responsibleText ? responsibleText.split(',').map(s => s.trim()).filter(Boolean) : [];
-
+    
     const updatedTask = {
         rowIndex: parseInt(activeEditElement.querySelector('.task-row-index').value, 10),
         name: activeEditElement.querySelector('.task-name-edit').value,
@@ -35,20 +35,22 @@ export async function handleSaveActiveTask() {
         project: activeEditElement.querySelector('.task-project-view').textContent,
         responsible: selectedEmployees,
         version: parseInt(activeEditElement.dataset.version, 10),
+        приоритет: parseInt(JSON.parse(activeEditElement.dataset.task).приоритет, 10)
     };
 
     try {
         const result = await api.saveTask({taskData: updatedTask, modifierName: appData.userName});
         if (result.status === 'success') {
-            uiUtils.showToast('Изменения сохранены');
+            uiUtils.showToast('Изменения сохранены', 'success');
             tg.HapticFeedback.notificationOccurred('success');
+            
+            const taskInAppData = appData.projects
+                .flatMap(p => p.tasks)
+                .find(t => t.rowIndex === updatedTask.rowIndex);
+            if (taskInAppData) Object.assign(taskInAppData, updatedTask, {version: result.newVersion});
+
             uiUtils.exitEditMode(activeEditElement);
             uiUtils.updateFabButtonUI(false, handleSaveActiveTask, handleShowAddTaskModal);
-
-            const oldTaskData = JSON.parse(activeEditElement.dataset.task);
-            const newTaskData = {...oldTaskData, ...updatedTask, responsible: selectedEmployees.join(', ')};
-            activeEditElement.dataset.task = JSON.stringify(newTaskData).replace(/'/g, '&apos;');
-            activeEditElement.dataset.version = result.newVersion;
         } else {
             if (result.error && result.error.includes("изменены другим пользователем")) {
                 tg.showAlert(result.error + '\nТекущие данные будут обновлены.', () => window.location.reload());
@@ -70,6 +72,7 @@ export async function handleCreateTask(taskData) {
     const tempRowIndex = `temp_${Date.now()}`;
     const optimisticTask = { ...taskData, rowIndex: tempRowIndex, version: 0 };
     let targetProject = appData.projects.find(p => p.name === optimisticTask.project);
+
     if (!targetProject) {
         targetProject = { name: optimisticTask.project, tasks: [] };
         appData.projects.push(targetProject);
@@ -80,7 +83,7 @@ export async function handleCreateTask(taskData) {
     targetProject.tasks.push(optimisticTask);
     modals.closeAddTaskModal();
     render.renderProjects(appData.projects, appData.userName, appData.userRole);
-    uiUtils.showToast('Задача добавлена, сохранение...');
+    uiUtils.showToast('Задача добавлена, идет сохранение...');
     tg.HapticFeedback.notificationOccurred('success');
     try {
         const result = await api.addTask({newTaskData: taskData, creatorName: appData.userName});
@@ -94,7 +97,7 @@ export async function handleCreateTask(taskData) {
                 }
             }
             render.renderProjects(appData.projects, appData.userName, appData.userRole);
-            uiUtils.showToast('Задача успешно сохранена!');
+            uiUtils.showToast('Задача успешно сохранена', 'success');
         } else {
             throw new Error(result.error || 'Неизвестная ошибка сервера');
         }
@@ -112,7 +115,7 @@ export async function handleStatusUpdate(rowIndex, newStatus) {
     if (!task) return;
     const oldStatus = task.status;
     task.status = newStatus;
-    if (newStatus === 'Выполнено') task.приоритет = 99;
+    if (newStatus === 'Выполнено') task.приоритет = 999;
     render.renderProjects(appData.projects, appData.userName, appData.userRole);
     uiUtils.showToast('Статус обновлён');
     try {
@@ -128,52 +131,36 @@ export async function handleStatusUpdate(rowIndex, newStatus) {
 // --- ФИНАЛЬНАЯ ВЕРСИЯ DRAG-N-DROP ---
 export function handleDragDrop(projectName, updatedTaskIdsInGroup) {
     const projectData = appData.projects.find(p => p.name === projectName);
-    if (!projectData) return;
+    if (!projectData) {
+        console.error(`[handleDragDrop] КРИТИЧЕСКАЯ ОШИБКА: Проект "${projectName}" не найден!`);
+        return;
+    }
 
     const taskMap = new Map(projectData.tasks.map(t => [t.rowIndex.toString(), t]));
 
-    // 1. Создаем новый, отсортированный пользователем, массив задач для измененной группы
-    const reorderedGroup = updatedTaskIdsInGroup.map(id => taskMap.get(id));
-    const modifiedStatus = reorderedGroup.length > 0 ? reorderedGroup[0].status : null;
+    // 1. Пересчитываем приоритеты от 1 до N для ВСЕХ задач в измененной группе
+    const tasksToUpdate = updatedTaskIdsInGroup.map((id, index) => {
+        const task = taskMap.get(id);
+        if (task) {
+            // Обновляем приоритет в локальном объекте немедленно
+            task.приоритет = index + 1;
+            return {
+                rowIndex: task.rowIndex,
+                приоритет: task.приоритет
+            };
+        }
+    }).filter(Boolean); // Убираем возможные undefined
 
-    // 2. Группируем все задачи проекта по статусам
-    const tasksByStatus = projectData.tasks.reduce((acc, task) => {
-        const status = task.status;
-        if (!acc[status]) acc[status] = [];
-        acc[status].push(task);
-        return acc;
-    }, {});
-
-    // 3. Заменяем старый массив задач в измененном статусе на новый, отсортированный
-    if (modifiedStatus) {
-        tasksByStatus[modifiedStatus] = reorderedGroup;
-    }
-
-    // 4. Собираем единый массив задач, отсортированный по порядку статусов, а внутри - по новому порядку пользователя
-    const sortedStatusKeys = Object.keys(tasksByStatus).sort((a, b) => (STATUSES.find(s => s.name === a) || { order: 99 }).order - (STATUSES.find(s => s.name === b) || { order: 99 }).order);
-    const fullSortedTasks = sortedStatusKeys.flatMap(status => tasksByStatus[status] || []);
-
-    // 5. Пересчитываем глобальные приоритеты для ВСЕХ задач проекта от 1 до N
-    const tasksToUpdate = fullSortedTasks.map((task, index) => {
-        task.приоритет = index + 1; // Обновляем приоритет в локальных данных
-        return {
-            rowIndex: task.rowIndex,
-            приоритет: task.приоритет
-        };
-    });
-
-    // 6. Сохраняем полностью отсортированный массив в наше локальное состояние
-    projectData.tasks = fullSortedTasks;
-    
-    // 7. Сразу перерисовываем интерфейс с новым порядком
+    // 2. Сразу же перерисовываем интерфейс. renderProjects использует уже обновленные
+    // локальные данные и отсортирует все правильно.
     render.renderProjects(appData.projects, appData.userName, appData.userRole);
-    uiUtils.showToast('Сохранение нового порядка...');
+    uiUtils.showToast('Идет сохранение нового порядка задач...');
     
-    // 8. Отправляем на сервер ПОЛНЫЙ список задач с новыми приоритетами
+    // 3. В фоновом режиме отправляем на сервер только измененные задачи
     api.updatePriorities({tasks: tasksToUpdate, modifierName: appData.userName})
         .then(result => {
             if (result.status === 'success') {
-                uiUtils.showToast('Новый порядок сохранён');
+                uiUtils.showToast('Сохранение завершено', 'success');
             } else {
                 throw new Error(result.error || 'Неизвестная ошибка сервера');
             }

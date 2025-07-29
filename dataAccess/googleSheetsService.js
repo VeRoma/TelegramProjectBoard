@@ -19,12 +19,10 @@ const loadSheetDataMiddleware = async (req, res, next) => {
             logs: doc.sheetsByTitle[SHEET_NAMES.LOGS]
         };
         if (!req.sheets.tasks || !req.sheets.statuses || !req.sheets.employees || !req.sheets.logs) {
-            console.error('One or more required sheets not found in the spreadsheet.');
             return res.status(500).json({ error: ERROR_MESSAGES.SHEET_MISSING });
         }
         next();
     } catch (error) {
-        console.error('Error loading Google Sheets info:', error);
         res.status(500).json({ error: ERROR_MESSAGES.GOOGLE_SHEET_ACCESS_ERROR });
     }
 };
@@ -86,7 +84,7 @@ const updateTaskInSheet = async (taskData, modifierName) => {
     rowToUpdate.set(TASK_COLUMNS.VERSION, currentVersion + 1);
     
     if (taskData.status === 'Выполнено') {
-        rowToUpdate.set(TASK_COLUMNS.PRIORITY, 99);
+        rowToUpdate.set(TASK_COLUMNS.PRIORITY, 999);
     } else if (taskData.приоритет !== undefined) {
         rowToUpdate.set(TASK_COLUMNS.PRIORITY, taskData.приоритет);
     }
@@ -125,7 +123,7 @@ const updateTaskPrioritiesInSheet = async (updatedTasks, modifierName) => {
     const rowMap = new Map(rows.map(row => [row.get(TASK_COLUMNS.ROW_INDEX).toString(), row]));
 
     const now = new Date().toLocaleString('ru-RU');
-    let modified = false;
+    const promisesToSave = [];
 
     for (const task of updatedTasks) {
         const rowToUpdate = rowMap.get(task.rowIndex.toString());
@@ -133,13 +131,12 @@ const updateTaskPrioritiesInSheet = async (updatedTasks, modifierName) => {
             rowToUpdate.set(TASK_COLUMNS.PRIORITY, task.приоритет);
             rowToUpdate.set(TASK_COLUMNS.MODIFIED_BY, modifierName);
             rowToUpdate.set(TASK_COLUMNS.MODIFIED_AT, now);
-            modified = true;
+            promisesToSave.push(rowToUpdate.save());
         }
     }
     
-    if (modified) {
-        const modifiedRows = rows.filter(row => row.isModified());
-        await tasksSheet.saveUpdatedCells(modifiedRows);
+    if (promisesToSave.length > 0) {
+        await Promise.all(promisesToSave);
     }
 };
 
