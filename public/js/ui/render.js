@@ -2,6 +2,7 @@ import { STATUSES } from '../data/statuses.js';
 
 function renderTaskCard(task, isUserView) {
     const taskDataString = JSON.stringify(task).replace(/'/g, '&apos;');
+    // В режиме пользователя всегда показываем проект, к которому относится задача
     const headerTopLine = isUserView ? task.project : (task.responsible || 'Не назначен');
     const statusIcon = (STATUSES.find(s => s.name === task.status) || {}).icon || '';
 
@@ -33,43 +34,60 @@ export function renderProjects(projects, userName, userRole) {
 
     const isUserView = userRole === 'user';
 
-    // Фильтруем задачи для обычного пользователя
     if (isUserView) {
-        projects.forEach(project => {
-            project.tasks = project.tasks.filter(task => task.status !== 'Выполнено');
-        });
-    }
-
-    if (isUserView) {
+        // --- ЛОГИКА ДЛЯ ОБЫЧНОГО ПОЛЬЗОВАТЕЛЯ ---
         let allUserTasks = [];
+        // Собираем все задачи из всех проектов, назначенных пользователю
         projects.forEach(p => allUserTasks.push(...p.tasks));
         
+        // Фильтруем выполненные
+        allUserTasks = allUserTasks.filter(task => task.status !== 'Выполнено');
+
         if (allUserTasks.length === 0) {
             mainContainer.innerHTML = `<div class="p-4 rounded-lg text-center" style="background-color: var(--tg-theme-secondary-bg-color);">Активных задач не найдено.</div>`;
             return;
         }
 
+        // Сортируем по статусу, затем по приоритету
+        allUserTasks.sort((a, b) => {
+            const orderA = (STATUSES.find(s => s.name === a.status) || { order: 99 }).order;
+            const orderB = (STATUSES.find(s => s.name === b.status) || { order: 99 }).order;
+            if (orderA !== orderB) return orderA - orderB;
+            return (a.приоритет || 999) - (b.приоритет || 999);
+        });
+
+        // Группируем по статусам для отрисовки
         const tasksByStatus = allUserTasks.reduce((acc, task) => {
             if (!acc[task.status]) acc[task.status] = [];
             acc[task.status].push(task);
             return acc;
         }, {});
         
-        const sortedStatusKeys = Object.keys(tasksByStatus).sort((a,b) => 
-            (STATUSES.find(s => s.name === a) || {}).order - (STATUSES.find(s => s.name === b) || {}).order
-        );
+        const sortedStatusKeys = Object.keys(tasksByStatus).sort((a,b) => (STATUSES.find(s => s.name === a) || {}).order - (STATUSES.find(s => s.name === b) || {}).order);
         
         let userHtml = '';
         sortedStatusKeys.forEach(status => {
             const tasksInGroup = tasksByStatus[status];
-            // --- СОРТИРОВКА ПРОИСХОДИТ ЗДЕСЬ ---
-            tasksInGroup.sort((a, b) => (a.приоритет || 99) - (b.приоритет || 99));
-            userHtml += `<div class="tasks-list space-y-2" data-status-group="${status}">${tasksInGroup.map(task => renderTaskCard(task, true)).join('')}</div>`;
+            const statusIcon = (STATUSES.find(s => s.name === status) || {}).icon || '';
+            userHtml += `
+                <div class="status-group p-2">
+                    <h3 class="status-group-header text-sm font-bold p-2" style="color: var(--tg-theme-hint-color);">${statusIcon} ${status}</h3>
+                    <div class="tasks-list space-y-2" data-status-group="${status}">
+                        ${tasksInGroup.map(task => renderTaskCard(task, true)).join('')}
+                    </div>
+                </div>`;
         });
         projectsContainer.innerHTML = userHtml;
 
-    } else { // Вид для admin/owner
+    } else { // --- ЛОГИКА ДЛЯ АДМИНА/ВЛАДЕЛЬЦА ---
         projects.forEach(project => {
+            project.tasks.sort((a, b) => {
+                const orderA = (STATUSES.find(s => s.name === a.status) || { order: 99 }).order;
+                const orderB = (STATUSES.find(s => s.name === b.status) || { order: 99 }).order;
+                if (orderA !== orderB) return orderA - orderB;
+                return (a.приоритет || 999) - (b.приоритет || 999);
+            });
+
             const projectCard = document.createElement('div');
             projectCard.className = 'card rounded-xl shadow-md overflow-hidden';
             
@@ -78,19 +96,12 @@ export function renderProjects(projects, userName, userRole) {
                 acc[task.status].push(task);
                 return acc;
             }, {});
-            
-            const sortedStatusKeys = Object.keys(tasksByStatus).sort((a,b) => 
-                (STATUSES.find(s => s.name === a) || {}).order - (STATUSES.find(s => s.name === b) || {}).order
-            );
+            const sortedStatusKeys = Object.keys(tasksByStatus).sort((a,b) => (STATUSES.find(s => s.name === a) || {}).order - (STATUSES.find(s => s.name === b) || {}).order);
 
             let projectHtml = '';
             sortedStatusKeys.forEach(status => {
                 const tasksInGroup = tasksByStatus[status];
                 const statusIcon = (STATUSES.find(s => s.name === status) || {}).icon || '';
-                
-                // --- И СОРТИРОВКА ПРОИСХОДИТ ЗДЕСЬ ---
-                tasksInGroup.sort((a, b) => (a.приоритет || 99) - (b.приоритет || 99));
-
                 projectHtml += `
                     <div class="status-group p-2">
                         <h3 class="status-group-header text-sm font-bold p-2" style="color: var(--tg-theme-hint-color);">${statusIcon} ${status}</h3>

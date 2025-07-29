@@ -2,6 +2,8 @@ const toast = document.getElementById('toast-notification');
 const fabButton = document.getElementById('fab-button');
 const fabIconContainer = document.getElementById('fab-icon-container');
 const mainContainer = document.getElementById('main-content');
+const loadingOverlay = document.getElementById('loading-overlay');
+const app = document.getElementById('app'); // Добавляем недостающую константу
 
 const ICONS = {
     refresh: `<svg class="h-7 w-7" fill="none" viewBox="0 0 24 24" stroke="var(--tg-theme-button-text-color, #ffffff)" stroke-width="2"><path d="M21 12a9 9 0 1 1-6.219-8.56" stroke-linecap="round" stroke-linejoin="round"></path></svg>`,
@@ -10,27 +12,31 @@ const ICONS = {
 };
 
 let saveTimeout;
+let currentFabClickHandler = null; // Переменная для хранения текущего обработчика
 
-export function showToast(message) {
+export function showToast(message, type = 'info') {
     toast.textContent = message;
-    toast.style.bottom = '1.5rem';
-    toast.style.opacity = '1';
+    
+    if (type === 'success') {
+        toast.style.backgroundColor = '#28a745';
+    } else {
+        toast.style.backgroundColor = 'var(--tg-theme-button-color, #007bff)';
+    }
+
+    toast.classList.add('show');
     clearTimeout(saveTimeout);
     saveTimeout = setTimeout(() => {
-        toast.style.bottom = '-100px';
-        toast.style.opacity = '0';
+        toast.classList.remove('show');
     }, 2500);
 }
 
 export function showLoading() {
-    document.getElementById('app').classList.remove('hidden');
-    mainContainer.innerHTML = '<div class="text-center py-10"><div class="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-500 mx-auto mt-4"></div></div>';
+    if (app) app.classList.remove('hidden');
+    if (mainContainer) mainContainer.innerHTML = '<div class="text-center py-10"><div class="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-500 mx-auto mt-4"></div></div>';
 }
 
 export function hideLoading() {
-    // В данной архитектуре эта функция может быть пустой,
-    // так как renderProjects полностью перезаписывает содержимое.
-    // Но она нужна для совместимости, чтобы избежать ошибок.
+    if (loadingOverlay) loadingOverlay.style.display = 'none';
 }
 
 export function showDataLoadError(error) {
@@ -38,22 +44,32 @@ export function showDataLoadError(error) {
     mainContainer.innerHTML = `<div class="p-4 bg-red-100 text-red-700 rounded-lg"><p class="font-bold">Ошибка загрузки</p><p class="text-sm mt-1">${errorMessage}</p></div>`;
 }
 
+// --- ИСПРАВЛЕННАЯ ФУНКЦИЯ ---
 export function updateFabButtonUI(isEditMode, saveHandler, addHandler) {
-    if (fabButton.onclick) {
-        fabButton.removeEventListener('click', fabButton.onclick);
+    // 1. Сначала всегда удаляем предыдущий обработчик, если он был
+    if (currentFabClickHandler) {
+        fabButton.removeEventListener('click', currentFabClickHandler);
     }
-    fabButton.onclick = isEditMode ? saveHandler : addHandler;
+
+    // 2. Определяем, какой обработчик будет новым
+    currentFabClickHandler = isEditMode ? saveHandler : addHandler;
+    
+    // 3. Назначаем новый обработчик
+    fabButton.addEventListener('click', currentFabClickHandler);
+
+    // 4. Обновляем иконку
     fabIconContainer.innerHTML = isEditMode ? ICONS.save : ICONS.add;
 }
+// ------------------------------
 
 export function showAccessDeniedScreen() {
-    document.getElementById('app').classList.add('hidden');
+    if (app) app.classList.add('hidden');
     document.getElementById('auth-blocker').classList.remove('hidden');
 }
 
 export function showRegistrationModal() {
     document.body.classList.add('overflow-hidden');
-    document.getElementById('app').classList.add('hidden');
+    if (app) app.classList.add('hidden');
     document.getElementById('registration-modal').classList.add('active');
 }
 
@@ -69,12 +85,12 @@ export function setupUserInfo(nameFromSheet) {
 }
 
 export function hideFab() {
-    fabButton.style.display = 'none';
+    if(fabButton) fabButton.style.display = 'none';
 }
 
 export function showFab() {
-    if (fabButton.style.display === 'flex') return;
-    fabButton.style.display = 'flex';
+    if(fabButton && fabButton.style.display === 'flex') return;
+    if(fabButton) fabButton.style.display = 'flex';
 }
 
 export function enterEditMode(detailsContainer, onBackCallback) {
@@ -90,6 +106,5 @@ export function exitEditMode(detailsContainer) {
         detailsContainer.classList.remove('edit-mode');
     }
     tg.BackButton.hide();
-    // Важно безопасно убирать обработчик
-    tg.offEvent('backButtonClicked', exitEditMode);
+    tg.BackButton.offClick(exitEditMode);
 }

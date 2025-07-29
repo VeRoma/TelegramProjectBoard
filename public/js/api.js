@@ -1,35 +1,73 @@
+/**
+ * Загружает начальные данные для приложения.
+ * @param {object} payload - Данные пользователя для верификации.
+ * @returns {Promise<object>}
+ */
 export function loadAppData(payload) {
     return fetch('/api/appdata', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        // Отправляем объект напрямую, без дополнительной обёртки
         body: JSON.stringify(payload)
-    }).then(res => res.json());
+    }).then(res => {
+        if (!res.ok) throw new Error('Ошибка при загрузке данных приложения');
+        return res.json();
+    });
 }
 
-export function saveTask(taskData) {
+/**
+ * Обновляет существующую задачу на сервере.
+ * @param {object} payload - Объект с данными задачи и именем изменившего.
+ * @returns {Promise<object>}
+ */
+export function saveTask(payload) {
     return fetch('/api/updatetask', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(taskData)
-    }).then(res => res.json());
+        body: JSON.stringify(payload)
+    }).then(res => {
+        if (!res.ok) throw new Error('Ошибка при сохранении задачи');
+        return res.json();
+    });
 }
+
+/**
+ * Проверяет пользователя на сервере.
+ * @param {object} user - Объект пользователя от Telegram.
+ * @returns {Promise<object>}
+ */
 export function verifyUser(user) {
     return fetch('/api/verifyuser', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ user })
-    }).then(res => res.json());
+    }).then(res => {
+        if (!res.ok) throw new Error('Ошибка верификации');
+        return res.json();
+    });
 }
-export function requestRegistration(name, userId, ownerId) {
+
+/**
+ * Отправляет запрос на регистрацию нового пользователя.
+ * @param {string} name - Имя, которое ввел пользователь.
+ * @param {string} userId - ID пользователя в Telegram.
+ * @returns {Promise<object>}
+ */
+export function requestRegistration(name, userId) {
     return fetch('/api/requestregistration', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, userId, ownerId })
-    }).then(res => res.json());
+        body: JSON.stringify({ name, userId })
+    }).then(res => {
+        if (!res.ok) throw new Error('Ошибка отправки запроса на регистрацию');
+        return res.json();
+    });
 }
 
-// Новая функция для логирования действий на сервере
+/**
+ * Логирует действие на стороне клиента на сервере.
+ * @param {string} message - Сообщение для лога.
+ * @param {object} context - Дополнительный контекст.
+ */
 export function logAction(message, context = {}) {
     fetch('/api/log', {
         method: 'POST',
@@ -39,21 +77,38 @@ export function logAction(message, context = {}) {
             message,
             context
         })
-    }).catch(error => console.error('Failed to log action:', error)); // Логируем ошибку логирования локально
+    }).catch(error => console.error('Не удалось залогировать действие:', error));
 }
 
-export function updatePriorities(tasks) {
+/**
+ * Обновляет приоритеты для нескольких задач одним запросом.
+ * @param {object} payload - Объект с массивом задач и именем изменившего.
+ * @returns {Promise<object>}
+ */
+export function updatePriorities(payload) {
+    // --- ИСПРАВЛЕНИЕ ЗДЕСЬ: Отправляем payload напрямую ---
     return fetch('/api/updatepriorities', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(tasks)
-    }).then(res => res.json());
+        body: JSON.stringify(payload)
+    }).then(res => {
+        if (!res.ok) throw new Error('Ошибка обновления приоритетов');
+        return res.json();
+    });
 }
 
-export function addTask(taskData) {
+/**
+ * Добавляет новую задачу на сервер.
+ * @param {object} payload - Объект с данными новой задачи и именем создателя.
+ * @returns {Promise<object>}
+ */
+export function addTask(payload) {
     return fetch('/api/addtask', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(taskData)
-    }).then(res => res.json());
+        body: JSON.stringify(payload)
+    }).then(res => {
+        if (!res.ok) throw new Error('Ошибка добавления задачи');
+        return res.json();
+    });
 }

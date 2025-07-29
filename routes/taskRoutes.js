@@ -36,7 +36,6 @@ router.post('/appdata', async (req, res) => {
             if (!projects[projectName]) {
                 projects[projectName] = { name: projectName, tasks: [] };
             }
-            // --- ГАРАНТИРУЕМ, ЧТО ВСЕ КЛЮЧЕВЫЕ ПОЛЯ - ЧИСЛА ---
             projects[projectName].tasks.push({
                 name: row.get(TASK_COLUMNS.NAME),
                 status: row.get(TASK_COLUMNS.STATUS),
@@ -45,17 +44,19 @@ router.post('/appdata', async (req, res) => {
                 version: parseInt(row.get(TASK_COLUMNS.VERSION) || 0, 10),
                 rowIndex: parseInt(row.get(TASK_COLUMNS.ROW_INDEX) || row.rowNumber, 10),
                 project: projectName,
-                приоритет: parseInt(row.get(TASK_COLUMNS.PRIORITY), 10) || 99,
+                приоритет: parseInt(row.get(TASK_COLUMNS.PRIORITY), 10) || 999,
                 modifiedBy: row.get(TASK_COLUMNS.MODIFIED_BY),
                 modifiedAt: row.get(TASK_COLUMNS.MODIFIED_AT)
             });
         });
+        
+        const finalProjects = Object.values(projects);
 
         const allProjectsFromData = await googleSheetsService.getTasks();
         const allProjects = [...new Set(allProjectsFromData.map(r => r.get(TASK_COLUMNS.PROJECT)).filter(Boolean))];
         const allEmployees = await googleSheetsService.getAllEmployees();
         
-        res.status(200).json({ projects: Object.values(projects), allProjects, userName, userRole, allEmployees });
+        res.status(200).json({ projects: finalProjects, allProjects, userName, userRole, allEmployees });
     } catch (error) {
         console.error('Error in /api/appdata:', error);
         res.status(500).json({ error: error.message });
@@ -114,7 +115,7 @@ router.post('/addtask', async (req, res) => {
             status: newRow.get(TASK_COLUMNS.STATUS),
             responsible: newRow.get(TASK_COLUMNS.RESPONSIBLE),
             message: newRow.get(TASK_COLUMNS.MESSAGE),
-            приоритет: parseInt(newRow.get(TASK_COLUMNS.PRIORITY), 10) || 99,
+            приоритет: parseInt(newRow.get(TASK_COLUMNS.PRIORITY), 10) || 999,
             version: parseInt(newRow.get(TASK_COLUMNS.VERSION), 10) || 0,
             rowIndex: parseInt(newRow.get(TASK_COLUMNS.ROW_INDEX), 10) || newRow.rowNumber,
             modifiedBy: newRow.get(TASK_COLUMNS.MODIFIED_BY),

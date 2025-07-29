@@ -107,56 +107,79 @@ export async function handleCreateTask(taskData) {
     }
 }
 
+// --- ФИНАЛЬНАЯ ВЕРСИЯ ОБНОВЛЕНИЯ СТАТУСА ---
 export async function handleStatusUpdate(rowIndex, newStatus) {
     const tg = window.Telegram.WebApp;
     const project = appData.projects.find(p => p.tasks.some(t => t.rowIndex == rowIndex));
     if (!project) return;
     const task = project.tasks.find(t => t.rowIndex == rowIndex);
     if (!task) return;
+
     const oldStatus = task.status;
+    const oldPriority = task.приоритет;
+
+    // 1. Оптимистично обновляем статус
     task.status = newStatus;
-    if (newStatus === 'Выполнено') task.приоритет = 999;
+    
+    // 2. Рассчитываем и присваиваем новый приоритет
+    if (newStatus === 'Выполнено') {
+        task.приоритет = 999; // У выполненных всегда самый низкий приоритет
+    } else {
+        // Находим все задачи в той же группе статусов (в том же проекте)
+        const tasksInNewGroup = project.tasks.filter(
+            t => t.status === newStatus && t.rowIndex !== task.rowIndex
+        );
+        
+        // Находим максимальный приоритет в новой группе
+        const maxPriority = Math.max(0, ...tasksInNewGroup.map(t => t.приоритет));
+        
+        // Присваиваем новый приоритет = максимальный + 1
+        task.приоритет = maxPriority + 1;
+    }
+
+    // 3. Сразу перерисовываем интерфейс с новым порядком
     render.renderProjects(appData.projects, appData.userName, appData.userRole);
-    uiUtils.showToast('Статус обновлён');
+    uiUtils.showToast('Статус обновлён, сохранение...');
+
     try {
+        // 4. В фоновом режиме отправляем запрос на сервер
         const result = await api.saveTask({taskData: task, modifierName: appData.userName});
-        if (result.status !== 'success') throw new Error(result.error || 'Ошибка сохранения на сервере');
+        if (result.status === 'success') {
+            // Обновляем версию задачи в локальных данных
+            task.version = result.newVersion;
+            uiUtils.showToast('Статус успешно сохранен', 'success');
+        } else {
+            throw new Error(result.error || 'Ошибка сохранения на сервере');
+        }
     } catch (error) {
+        // 5. ОШИБКА: Показываем сообщение и откатываем изменения
         tg.showAlert('Не удалось сохранить новый статус. Возвращаем как было.');
         task.status = oldStatus;
+        task.приоритет = oldPriority;
         render.renderProjects(appData.projects, appData.userName, appData.userRole);
     }
 }
 
-// --- ФИНАЛЬНАЯ ВЕРСИЯ DRAG-N-DROP ---
 export function handleDragDrop(projectName, updatedTaskIdsInGroup) {
     const projectData = appData.projects.find(p => p.name === projectName);
-    if (!projectData) {
-        console.error(`[handleDragDrop] КРИТИЧЕСКАЯ ОШИБКА: Проект "${projectName}" не найден!`);
-        return;
-    }
+    if (!projectData) return;
 
     const taskMap = new Map(projectData.tasks.map(t => [t.rowIndex.toString(), t]));
 
-    // 1. Пересчитываем приоритеты от 1 до N для ВСЕХ задач в измененной группе
     const tasksToUpdate = updatedTaskIdsInGroup.map((id, index) => {
         const task = taskMap.get(id);
         if (task) {
-            // Обновляем приоритет в локальном объекте немедленно
             task.приоритет = index + 1;
             return {
                 rowIndex: task.rowIndex,
                 приоритет: task.приоритет
             };
         }
-    }).filter(Boolean); // Убираем возможные undefined
+    }).filter(Boolean);
 
-    // 2. Сразу же перерисовываем интерфейс. renderProjects использует уже обновленные
-    // локальные данные и отсортирует все правильно.
     render.renderProjects(appData.projects, appData.userName, appData.userRole);
     uiUtils.showToast('Идет сохранение нового порядка задач...');
     
-    // 3. В фоновом режиме отправляем на сервер только измененные задачи
     api.updatePriorities({tasks: tasksToUpdate, modifierName: appData.userName})
         .then(result => {
             if (result.status === 'success') {
@@ -167,6 +190,6 @@ export function handleDragDrop(projectName, updatedTaskIdsInGroup) {
         })
         .catch(error => {
             window.Telegram.WebApp.showAlert('Не удалось сохранить новый порядок задач: ' + error.message);
-            window.location.reload(); // В случае ошибки - откатываемся
+            window.location.reload();
         });
 }
