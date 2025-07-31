@@ -175,14 +175,16 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    async function startApp() {
+   async function startApp() {
         const success = await auth.initializeApp();
         if (success) {
+            // --- ИСПРАВЛЕНИЕ ЗДЕСЬ ---
+            // Получаем актуальные данные из хранилища после инициализации
+            const appData = store.getAppData();
+            // -------------------------
+
             modals.setupModals(handlers.handleStatusUpdate, handlers.handleCreateTask, store.getAllEmployees, appData.userRole, appData.userName);
             uiUtils.updateFabButtonUI(false, handlers.handleShowAddTaskModal, handlers.handleShowAddTaskModal);
-
-            
-       
         }
     }
 

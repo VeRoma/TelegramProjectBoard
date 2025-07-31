@@ -45,7 +45,7 @@ export function showDataLoadError(error) {
 }
 
 export function updateFabButtonUI(isEditMode, saveHandler, addHandler) {
-    // Сначала всегда безопасно удаляем старый обработчик, чтобы избежать дублирования
+    // Безопасно удаляем старый обработчик, чтобы избежать дублирования
     if (fabButton.onclick) {
         fabButton.removeEventListener('click', fabButton.onclick);
     }
@@ -56,7 +56,7 @@ export function updateFabButtonUI(isEditMode, saveHandler, addHandler) {
         fabButton.onclick = saveHandler;
     } else {
         // --- ВОССТАНОВЛЕННАЯ ЛОГИКА ---
-        // Настраиваем кнопку для режима "Добавить"
+        // Настраиваем кнопку для обычного режима "Добавить"
         fabIconContainer.innerHTML = ICONS.add;
         fabButton.onclick = addHandler;
         // ---------------------------------
