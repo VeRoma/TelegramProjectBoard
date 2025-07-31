@@ -128,6 +128,17 @@ const updateTaskPrioritiesInSheet = async (updatedTasks, modifierName) => {
     for (const task of updatedTasks) {
         const rowToUpdate = rowMap.get(task.rowIndex.toString());
         if (rowToUpdate) {
+            const oldPriority = rowToUpdate.get(TASK_COLUMNS.PRIORITY);
+            const oldStatus = rowToUpdate.get(TASK_COLUMNS.STATUS);
+            
+            // --- ФИНАЛЬНАЯ ЛОГИКА ЛОГИРОВАНИЯ ---
+            if (task.status && task.status !== oldStatus) {
+                console.log(`[LOG] Задача "${task.name}": статус изменен с "${oldStatus}" на "${task.status}", приоритет изменен с ${oldPriority} на ${task.приоритет}.`);
+                rowToUpdate.set(TASK_COLUMNS.STATUS, task.status);
+            } else if (oldPriority != task.приоритет) {
+                 console.log(`[LOG] Задача "${task.name}": приоритет изменен с ${oldPriority} на ${task.приоритет}.`);
+            }
+            
             rowToUpdate.set(TASK_COLUMNS.PRIORITY, task.приоритет);
             rowToUpdate.set(TASK_COLUMNS.MODIFIED_BY, modifierName);
             rowToUpdate.set(TASK_COLUMNS.MODIFIED_AT, now);

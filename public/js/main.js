@@ -10,8 +10,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const tg = window.Telegram.WebApp;
     const mainContainer = document.getElementById('main-content');
     
-    // --- Установка основного обработчика событий на клики ---
-    
     mainContainer.addEventListener('click', async (event) => {
         const statusActionArea = event.target.closest('.status-action-area');
         if (statusActionArea) {
@@ -21,7 +19,6 @@ document.addEventListener('DOMContentLoaded', () => {
             modals.openStatusModal(detailsContainer);
             return;
         }
-
         const editBtn = event.target.closest('.edit-btn');
         if (editBtn) {
             const detailsContainer = editBtn.closest('.task-details');
@@ -37,7 +34,6 @@ document.addEventListener('DOMContentLoaded', () => {
             uiUtils.updateFabButtonUI(true, handlers.handleSaveActiveTask, handlers.handleShowAddTaskModal);
             return;
         }
-        
         const modalTrigger = event.target.closest('.modal-trigger-field');
         if (modalTrigger) {
             const modalType = modalTrigger.dataset.modalType;
@@ -47,7 +43,6 @@ document.addEventListener('DOMContentLoaded', () => {
             else if (modalType === 'project') modals.openProjectModal(activeTaskDetailsElement, handlers.allProjects);
             return;
         }
-
         const taskHeader = event.target.closest('.task-header');
         if (taskHeader) {
             if (event.target.closest('.status-action-area')) return;
@@ -58,38 +53,28 @@ document.addEventListener('DOMContentLoaded', () => {
                 currentlyOpen.classList.remove('expanded');
                 setTimeout(() => { currentlyOpen.innerHTML = ''; }, 300);
             }
-
             if (!detailsContainer.innerHTML) render.renderTaskDetails(detailsContainer);
             detailsContainer.classList.toggle('expanded');
-
             if (!detailsContainer.classList.contains('expanded')) {
                 setTimeout(() => { detailsContainer.innerHTML = ''; }, 300);
             }
             return;
         }
-
         const projectHeader = event.target.closest('.project-header');
         if (projectHeader) {
             projectHeader.nextElementSibling.classList.toggle('expanded');
         }
     });
 
-    // --- Логика Drag-n-Drop с детальным логированием ---
     let draggedElement = null;
 
     mainContainer.addEventListener('dragstart', (e) => {
-        console.log('--- [EVENT] dragstart ---');
         const draggableCard = e.target.closest('[draggable="true"]');
-        if (!draggableCard) {
-            console.log('[dragstart] Не является перетаскиваемым элементом.');
-            return;
-        }
-        console.log('[dragstart] Перетаскиваемый элемент:', draggableCard);
+        if (!draggableCard) return;
         uiUtils.hideFab();
         draggedElement = draggableCard;
         setTimeout(() => { 
             draggedElement.classList.add('dragging');
-            console.log('[dragstart] Добавлен класс "dragging"');
         }, 0);
     });
 
@@ -108,18 +93,13 @@ document.addEventListener('DOMContentLoaded', () => {
     mainContainer.addEventListener('dragover', (e) => {
         e.preventDefault();
         if (!draggedElement) return;
-
         const dragGroup = draggedElement.dataset.statusGroup;
         const container = e.target.closest(`.tasks-list[data-status-group="${dragGroup}"]`);
         
         document.querySelectorAll('.drag-over, .drag-over-end').forEach(el => {
             el.classList.remove('drag-over', 'drag-over-end');
         });
-
-        if (!container) {
-            return;
-        }
-
+        if (!container) return;
         const afterElement = getDragAfterElement(container, e.clientY);
         
         if (afterElement) {
@@ -130,42 +110,32 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     mainContainer.addEventListener('drop', (e) => {
-        console.log('--- [EVENT] drop ---');
         e.preventDefault();
-        if (!draggedElement) {
-            console.log('[drop] Перетаскиваемый элемент не найден. Отмена.');
-            return;
-        }
+        if (!draggedElement) return;
         
         const dropContainer = e.target.closest(`.tasks-list[data-status-group="${draggedElement.dataset.statusGroup}"]`);
         if (!dropContainer) {
-            console.log('[drop] Элемент брошен не в свою группу. Отмена.');
-            mainContainer.dispatchEvent(new Event('dragend'));
-            return;
+             mainContainer.dispatchEvent(new Event('dragend'));
+             return;
         };
-        console.log('[drop] Элемент брошен в правильный контейнер.', dropContainer);
-
         const afterElement = getDragAfterElement(dropContainer, e.clientY);
         if (afterElement) {
             dropContainer.insertBefore(draggedElement, afterElement);
         } else {
             dropContainer.appendChild(draggedElement);
         }
-        console.log('[drop] Элемент вставлен в DOM.');
-
-        const projectElement = draggedElement.closest('.card')?.querySelector('.project-header h2');
-        const projectName = projectElement ? projectElement.textContent : appData.userName;
-        console.log('[drop] Имя проекта -', projectName);
+        
+        const taskDataString = draggedElement.querySelector('.task-details').dataset.task;
+        const taskData = JSON.parse(taskDataString.replace(/&apos;/g, "'"));
+        const projectName = taskData.project;
 
         const tasksInGroup = Array.from(dropContainer.querySelectorAll('[draggable="true"]'));
         const updatedTaskIds = tasksInGroup.map(card => card.dataset.taskId);
-        console.log('[drop] Новый порядок ID задач:', updatedTaskIds);
-
+        
         handlers.handleDragDrop(projectName, updatedTaskIds);
     });
 
     mainContainer.addEventListener('dragend', () => {
-        console.log('--- [EVENT] dragend ---');
         if (draggedElement) {
             draggedElement.classList.remove('dragging');
         }
@@ -174,10 +144,8 @@ document.addEventListener('DOMContentLoaded', () => {
         });
         draggedElement = null;
         uiUtils.showFab();
-        console.log('[dragend] Все стили и переменные очищены.');
     });
 
-    // --- Логика регистрации ---
     document.getElementById('register-btn').addEventListener('click', async () => {
         const nameInput = document.getElementById('name-input');
         const name = nameInput.value.trim();
@@ -200,22 +168,12 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    // --- Запуск приложения ---
     async function startApp() {
-        console.log("[main.js] > startApp вызвана.");
         const initialData = await auth.initializeApp();
-
         if (initialData) {
-            console.log("[main.js] > Инициализация успешна. Настройка обработчиков...");
             handlers.setInitialData(initialData);
-            modals.setupModals(
-                handlers.handleStatusUpdate, 
-                handlers.handleCreateTask, 
-                handlers.getEmployees
-            );
-            uiUtils.updateFabButtonUI(false, handlers.handleShowAddTaskModal, handlers.handleSaveActiveTask);
-        } else {
-             console.error("[main.js] > Инициализация не вернула данные. Приложение не будет полностью функционально.");
+            modals.setupModals(handlers.handleStatusUpdate, handlers.handleCreateTask, handlers.getEmployees);
+            uiUtils.updateFabButtonUI(false, handlers.handleSaveActiveTask, handlers.handleShowAddTaskModal);
         }
     }
 

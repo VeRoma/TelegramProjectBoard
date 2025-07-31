@@ -27,15 +27,23 @@ export async function handleSaveActiveTask() {
     const responsibleText = activeEditElement.querySelector('.task-responsible-view').textContent;
     const selectedEmployees = responsibleText ? responsibleText.split(',').map(s => s.trim()).filter(Boolean) : [];
     
+    const taskInAppData = appData.projects
+        .flatMap(p => p.tasks)
+        .find(t => t.rowIndex == activeEditElement.querySelector('.task-row-index').value);
+
+    if (!taskInAppData) {
+        tg.showAlert('Не удалось найти исходную задачу для сохранения.');
+        return;
+    }
+
     const updatedTask = {
-        rowIndex: parseInt(activeEditElement.querySelector('.task-row-index').value, 10),
+        ...taskInAppData,
         name: activeEditElement.querySelector('.task-name-edit').value,
         message: activeEditElement.querySelector('.task-message-edit').value,
         status: activeEditElement.querySelector('.task-status-view').textContent,
         project: activeEditElement.querySelector('.task-project-view').textContent,
         responsible: selectedEmployees,
         version: parseInt(activeEditElement.dataset.version, 10),
-        приоритет: parseInt(JSON.parse(activeEditElement.dataset.task).приоритет, 10)
     };
 
     try {
@@ -44,13 +52,11 @@ export async function handleSaveActiveTask() {
             uiUtils.showToast('Изменения сохранены', 'success');
             tg.HapticFeedback.notificationOccurred('success');
             
-            const taskInAppData = appData.projects
-                .flatMap(p => p.tasks)
-                .find(t => t.rowIndex === updatedTask.rowIndex);
-            if (taskInAppData) Object.assign(taskInAppData, updatedTask, {version: result.newVersion});
+            Object.assign(taskInAppData, updatedTask, {version: result.newVersion});
 
             uiUtils.exitEditMode(activeEditElement);
             uiUtils.updateFabButtonUI(false, handleSaveActiveTask, handleShowAddTaskModal);
+            render.renderProjects(appData.projects, appData.userName, appData.userRole);
         } else {
             if (result.error && result.error.includes("изменены другим пользователем")) {
                 tg.showAlert(result.error + '\nТекущие данные будут обновлены.', () => window.location.reload());
@@ -107,56 +113,54 @@ export async function handleCreateTask(taskData) {
     }
 }
 
-// --- ФИНАЛЬНАЯ ВЕРСИЯ ОБНОВЛЕНИЯ СТАТУСА ---
 export async function handleStatusUpdate(rowIndex, newStatus) {
     const tg = window.Telegram.WebApp;
     const project = appData.projects.find(p => p.tasks.some(t => t.rowIndex == rowIndex));
     if (!project) return;
     const task = project.tasks.find(t => t.rowIndex == rowIndex);
-    if (!task) return;
+    if (!task || task.status === newStatus) return;
 
     const oldStatus = task.status;
     const oldPriority = task.приоритет;
 
-    // 1. Оптимистично обновляем статус
     task.status = newStatus;
     
-    // 2. Рассчитываем и присваиваем новый приоритет
     if (newStatus === 'Выполнено') {
-        task.приоритет = 999; // У выполненных всегда самый низкий приоритет
+        task.приоритет = 999;
     } else {
-        // Находим все задачи в той же группе статусов (в том же проекте)
-        const tasksInNewGroup = project.tasks.filter(
-            t => t.status === newStatus && t.rowIndex !== task.rowIndex
-        );
-        
-        // Находим максимальный приоритет в новой группе
+        const tasksInNewGroup = project.tasks.filter(t => t.status === newStatus && t.rowIndex !== task.rowIndex);
         const maxPriority = Math.max(0, ...tasksInNewGroup.map(t => t.приоритет));
-        
-        // Присваиваем новый приоритет = максимальный + 1
         task.приоритет = maxPriority + 1;
     }
 
-    // 3. Сразу перерисовываем интерфейс с новым порядком
+    const tasksInOldGroup = project.tasks.filter(t => t.status === oldStatus);
+    tasksInOldGroup.sort((a, b) => a.приоритет - b.приоритет).forEach((t, index) => {
+        t.приоритет = index + 1;
+    });
+
     render.renderProjects(appData.projects, appData.userName, appData.userRole);
-    uiUtils.showToast('Статус обновлён, сохранение...');
+    uiUtils.showToast('Статус обновлён, идет сохранение...');
+    
+    // --- ИЗМЕНЕНИЕ ЗДЕСЬ: Добавляем 'name' для логов ---
+    const tasksToUpdate = [...tasksInOldGroup, task].map(t => ({
+        rowIndex: t.rowIndex,
+        приоритет: t.приоритет,
+        status: t.status,
+        name: t.name // Добавляем имя для логгирования
+    }));
 
     try {
-        // 4. В фоновом режиме отправляем запрос на сервер
-        const result = await api.saveTask({taskData: task, modifierName: appData.userName});
+        const result = await api.updatePriorities({tasks: tasksToUpdate, modifierName: appData.userName});
         if (result.status === 'success') {
-            // Обновляем версию задачи в локальных данных
-            task.version = result.newVersion;
-            uiUtils.showToast('Статус успешно сохранен', 'success');
+            uiUtils.showToast('Сохранение завершено', 'success');
         } else {
             throw new Error(result.error || 'Ошибка сохранения на сервере');
         }
     } catch (error) {
-        // 5. ОШИБКА: Показываем сообщение и откатываем изменения
-        tg.showAlert('Не удалось сохранить новый статус. Возвращаем как было.');
+        tg.showAlert('Не удалось сохранить изменения: ' + error.message);
         task.status = oldStatus;
         task.приоритет = oldPriority;
-        render.renderProjects(appData.projects, appData.userName, appData.userRole);
+        window.location.reload();
     }
 }
 
@@ -170,10 +174,7 @@ export function handleDragDrop(projectName, updatedTaskIdsInGroup) {
         const task = taskMap.get(id);
         if (task) {
             task.приоритет = index + 1;
-            return {
-                rowIndex: task.rowIndex,
-                приоритет: task.приоритет
-            };
+            return { rowIndex: task.rowIndex, приоритет: task.приоритет };
         }
     }).filter(Boolean);
 
