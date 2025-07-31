@@ -47,7 +47,6 @@ export function openAddTaskModal(allProjects, allEmployees, userRole, userName) 
     const projectsOptions = allProjects.map(p => `<option value="${p}">${p}</option>`).join('');
     
     let responsibleHtml = '';
-    // Если роль НЕ 'user', генерируем блок для выбора ответственных
     if (userRole !== 'user') {
         const userEmployees = allEmployees.filter(e => e.role === 'user');
         const employeesCheckboxes = userEmployees.map(e => `<label class="flex items-center space-x-3 p-3 rounded-md hover:bg-gray-200"><input type="checkbox" value="${e.name}" class="employee-checkbox w-4 h-4 rounded"><span>${e.name}</span></label>`).join('');
@@ -66,14 +65,25 @@ export function openAddTaskModal(allProjects, allEmployees, userRole, userName) 
             <div class="modal-body space-y-4">
                 <div><label class="text-xs font-medium text-gray-500">Наименование</label><input type="text" id="new-task-name" class="details-input mt-1" placeholder="Название задачи" required></div>
                 <div><label class="text-xs font-medium text-gray-500">Проект</label><select id="new-task-project" class="details-input mt-1" required><option value="" disabled selected>Выберите...</option>${projectsOptions}</select></div>
+                
                 <div>
                     <label class="text-xs font-medium text-gray-500">Статус</label>
                     <div id="new-task-status-toggle" class="status-toggle">
-                        <div class="toggle-option active" data-status="К выполнению">К выполнению</div>
-                        <div class="toggle-option" data-status="В работе">В работе</div>
-                        <div class="toggle-option" data-status="На контроле">На контроле</div>
+                        <div class="toggle-option active" data-status="К выполнению">
+                            <span class="toggle-icon">📥</span>
+                            <span class="toggle-text">К выполнению</span>
+                        </div>
+                        <div class="toggle-option" data-status="В работе">
+                            <span class="toggle-icon">⚒️</span>
+                            <span class="toggle-text">В работе</span>
+                        </div>
+                        <div class="toggle-option" data-status="На контроле">
+                            <span class="toggle-icon">🔍</span>
+                            <span class="toggle-text">На контроле</span>
+                        </div>
                     </div>
                 </div>
+
                 <div><label class="text-xs font-medium text-gray-500">Сообщение исполнителю</label><textarea id="new-task-message" rows="3" class="details-input mt-1"></textarea></div>
                 ${responsibleHtml}
             </div>
@@ -97,6 +107,7 @@ export function openAddTaskModal(allProjects, allEmployees, userRole, userName) 
     tg.BackButton.onClick(closeAddTaskModal);
     tg.BackButton.show();
 }
+
 export function closeAddTaskModal() {
     const tg = window.Telegram.WebApp;
     addTaskModal.classList.remove('active');
