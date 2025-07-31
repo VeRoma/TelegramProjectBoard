@@ -44,23 +44,24 @@ export function showDataLoadError(error) {
     mainContainer.innerHTML = `<div class="p-4 bg-red-100 text-red-700 rounded-lg"><p class="font-bold">Ошибка загрузки</p><p class="text-sm mt-1">${errorMessage}</p></div>`;
 }
 
-// --- ИСПРАВЛЕННАЯ ФУНКЦИЯ ---
 export function updateFabButtonUI(isEditMode, saveHandler, addHandler) {
-    // 1. Сначала всегда удаляем предыдущий обработчик, если он был
-    if (currentFabClickHandler) {
-        fabButton.removeEventListener('click', currentFabClickHandler);
+    // Сначала всегда безопасно удаляем старый обработчик, чтобы избежать дублирования
+    if (fabButton.onclick) {
+        fabButton.removeEventListener('click', fabButton.onclick);
     }
-
-    // 2. Определяем, какой обработчик будет новым
-    currentFabClickHandler = isEditMode ? saveHandler : addHandler;
     
-    // 3. Назначаем новый обработчик
-    fabButton.addEventListener('click', currentFabClickHandler);
-
-    // 4. Обновляем иконку
-    fabIconContainer.innerHTML = isEditMode ? ICONS.save : ICONS.add;
+    if (isEditMode) {
+        // Настраиваем кнопку для режима "Сохранить"
+        fabIconContainer.innerHTML = ICONS.save;
+        fabButton.onclick = saveHandler;
+    } else {
+        // --- ВОССТАНОВЛЕННАЯ ЛОГИКА ---
+        // Настраиваем кнопку для режима "Добавить"
+        fabIconContainer.innerHTML = ICONS.add;
+        fabButton.onclick = addHandler;
+        // ---------------------------------
+    }
 }
-// ------------------------------
 
 export function showAccessDeniedScreen() {
     if (app) app.classList.add('hidden');
