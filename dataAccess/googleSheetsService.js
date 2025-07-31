@@ -116,6 +116,7 @@ const addTaskToSheet = async (newTaskData, creatorName) => {
     return newRow;
 };
 
+// --- ФИНАЛЬНАЯ ВЕРСИЯ ОБНОВЛЕНИЯ ПРИОРИТЕТОВ ---
 const updateTaskPrioritiesInSheet = async (updatedTasks, modifierName) => {
     const tasksSheet = await getSheet(SHEET_NAMES.TASKS);
     
@@ -128,6 +129,10 @@ const updateTaskPrioritiesInSheet = async (updatedTasks, modifierName) => {
     for (const task of updatedTasks) {
         const rowToUpdate = rowMap.get(task.rowIndex.toString());
         if (rowToUpdate) {
+            // Если в объекте задачи передан новый статус, обновляем и его
+            if(task.status) {
+                rowToUpdate.set(TASK_COLUMNS.STATUS, task.status);
+            }
             rowToUpdate.set(TASK_COLUMNS.PRIORITY, task.priority);
             rowToUpdate.set(TASK_COLUMNS.MODIFIED_BY, modifierName);
             rowToUpdate.set(TASK_COLUMNS.MODIFIED_AT, now);

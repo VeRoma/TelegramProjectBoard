@@ -158,7 +158,7 @@ export function handleDragDrop(projectName, updatedTaskIdsInGroup) {
             return { rowIndex: task.rowIndex, priority: task.priority };
         }
     }).filter(Boolean);
-    print(tasksToUpdate);
+    // print(tasksToUpdate);
 
     render.renderProjects(appData.projects, appData.userName, appData.userRole);
     uiUtils.showToast('Идет сохранение нового порядка задач...');
