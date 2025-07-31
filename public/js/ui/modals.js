@@ -41,34 +41,55 @@ export function openProjectModal(activeTaskDetailsElement, allProjects) {
     projectModal.dataset.targetElement = `#${activeTaskDetailsElement.id || (activeTaskDetailsElement.id = `task-${Date.now()}`)}`;
 }
 
-export function openAddTaskModal(allProjects, allEmployees) {
-    console.log('[modals.js] > openAddTaskModal вызвана.');
+export function openAddTaskModal(allProjects, allEmployees, userRole, userName) {
     document.body.classList.add('overflow-hidden');
     const tg = window.Telegram.WebApp;
     const projectsOptions = allProjects.map(p => `<option value="${p}">${p}</option>`).join('');
-    const userEmployees = allEmployees.filter(e => e.role === 'user');
-    const employeesCheckboxes = userEmployees.map(e => `<label class="flex items-center space-x-3 p-3 rounded-md hover:bg-gray-200"><input type="checkbox" name="responsible[]" value="${e.name}" class="employee-checkbox w-4 h-4 rounded"><span>${e.name}</span></label>`).join('');
+    
+    let responsibleHtml = '';
+    // Если пользователь НЕ user (т.е. admin или owner), показываем ему список для выбора
+    if (userRole !== 'user') {
+        const userEmployees = allEmployees.filter(e => e.role === 'user');
+        const employeesCheckboxes = userEmployees.map(e => `<label class="flex items-center space-x-3 p-3 rounded-md hover:bg-gray-200"><input type="checkbox" value="${e.name}" class="employee-checkbox w-4 h-4 rounded"><span>${e.name}</span></label>`).join('');
+        responsibleHtml = `
+            <div>
+                <label class="text-xs font-medium text-gray-500">Ответственные</label>
+                <div class="modal-body-employee mt-1 border rounded-md p-2">${employeesCheckboxes}</div>
+            </div>`;
+    }
     
     addTaskModal.innerHTML = `
         <div class="modal-content">
             <div class="p-4 border-b">
                 <h3 class="text-lg font-bold">Новая задача</h3>
             </div>
-            <form id="add-task-form" class="modal-body space-y-4">
-                <div><label class="text-xs font-medium text-gray-500">Наименование</label><input type="text" name="name" class="details-input mt-1" placeholder="Название задачи" required></div>
-                <div><label class="text-xs font-medium text-gray-500">Проект</label><select name="project" class="details-input mt-1" required><option value="" disabled selected>Выберите...</option>${projectsOptions}</select></div>
+            <div class="modal-body space-y-4">
+                <div><label class="text-xs font-medium text-gray-500">Наименование</label><input type="text" id="new-task-name" class="details-input mt-1" placeholder="Название задачи" required></div>
+                <div><label class="text-xs font-medium text-gray-500">Проект</label><select id="new-task-project" class="details-input mt-1" required><option value="" disabled selected>Выберите...</option>${projectsOptions}</select></div>
+                
                 <div>
                     <label class="text-xs font-medium text-gray-500">Статус</label>
                     <div id="new-task-status-toggle" class="status-toggle">
-                        <div class="toggle-option active" data-status="В работе">В работе</div>
-                        <div class="toggle-option" data-status="На контроле">На контроле</div>
+                        <div class="toggle-option active" data-status="К выполнению">
+                            <span class="toggle-icon">📥</span>
+                            <span class="toggle-text">К выполнению</span>
+                        </div>
+                        <div class="toggle-option" data-status="В работе">
+                            <span class="toggle-icon">⚒️</span>
+                            <span class="toggle-text">В работе</span>
+                        </div>
+                        <div class="toggle-option" data-status="На контроле">
+                            <span class="toggle-icon">🔍</span>
+                            <span class="toggle-text">На контроле</span>
+                        </div>
                     </div>
                 </div>
-                <div><label class="text-xs font-medium text-gray-500">Сообщение исполнителю</label><textarea name="message" rows="3" class="details-input mt-1"></textarea></div>
-                <div><label class="text-xs font-medium text-gray-500">Ответственные</label><div class="modal-body-employee mt-1 border rounded-md p-2">${employeesCheckboxes}</div></div>
-            </form>
+
+                <div><label class="text-xs font-medium text-gray-500">Сообщение исполнителю</label><textarea id="new-task-message" rows="3" class="details-input mt-1"></textarea></div>
+                ${responsibleHtml}
+            </div>
             <div class="p-2 border-t flex justify-end">
-                <button type="submit" form="add-task-form" class="modal-select-btn px-4 py-2 rounded-lg">Создать</button>
+                <button id="add-task-create-btn" class="modal-select-btn px-4 py-2 rounded-lg">Создать</button>
             </div>
         </div>`;
     addTaskModal.classList.add('active');
@@ -76,16 +97,16 @@ export function openAddTaskModal(allProjects, allEmployees) {
     const statusToggle = document.getElementById('new-task-status-toggle');
     if (statusToggle) {
         statusToggle.addEventListener('click', (e) => {
-            if (e.target && e.target.classList.contains('toggle-option')) {
+            const targetOption = e.target.closest('.toggle-option');
+            if (targetOption) {
                 statusToggle.querySelectorAll('.toggle-option').forEach(opt => opt.classList.remove('active'));
-                e.target.classList.add('active');
+                targetOption.classList.add('active');
             }
         });
     }
 
     tg.BackButton.onClick(closeAddTaskModal);
     tg.BackButton.show();
-    console.log('[modals.js] > Модальное окно создания задачи отрисовано и показано.');
 }
 
 export function closeAddTaskModal() {
@@ -96,18 +117,15 @@ export function closeAddTaskModal() {
     tg.BackButton.offClick(closeAddTaskModal);
 }
 
-export function setupModals(onStatusChange, onCreateTask, getEmployeesCallback) {
-    console.log('[modals.js] > setupModals вызвана. Установка обработчиков...');
+export function setupModals(onStatusChange, onCreateTask, getEmployeesCallback, userRole, userName) {
     const modals = [statusModal, employeeModal, projectModal, addTaskModal];
-    
     modals.forEach(modal => {
         modal.addEventListener('click', (e) => {
             if (e.target === modal) {
                 modal.classList.remove('active');
                 document.body.classList.remove('overflow-hidden');
             }
-            
-            if (e.target.closest('.status-option')) {
+            if (modal.id === 'status-modal' && e.target.closest('.status-option')) {
                 const selectedOption = e.target.closest('.status-option');
                 const targetElement = document.querySelector(modal.dataset.targetElement);
                 if (!targetElement) return;
@@ -117,7 +135,6 @@ export function setupModals(onStatusChange, onCreateTask, getEmployeesCallback) 
                 modal.classList.remove('active');
                 document.body.classList.remove('overflow-hidden');
             }
-            
             if (e.target.closest('.modal-select-btn') && modal.id !== 'add-task-modal') {
                 const targetElement = document.querySelector(modal.dataset.targetElement);
                 if (!targetElement) return;
@@ -131,45 +148,52 @@ export function setupModals(onStatusChange, onCreateTask, getEmployeesCallback) 
                 modal.classList.remove('active');
                 document.body.classList.remove('overflow-hidden');
             }
+            
+            if (modal.id === 'add-task-modal' && e.target.closest('#add-task-create-btn')) {
+                e.preventDefault();
+                const taskName = document.getElementById('new-task-name').value;
+                const projectName = document.getElementById('new-task-project').value;
+                const message = document.getElementById('new-task-message').value;
+                const activeStatusElement = document.querySelector('#new-task-status-toggle .toggle-option.active');
+                const status = activeStatusElement ? activeStatusElement.dataset.status : 'К выполнению';
+
+                let responsibleNames = [];
+                if(userRole === 'user') {
+                    // Если user, назначаем его ответственным автоматически
+                    responsibleNames = [userName];
+                } else {
+                    // Если admin/owner, собираем данные из чекбоксов
+                    const responsibleCheckboxes = document.querySelectorAll('#add-task-modal .employee-checkbox:checked');
+                    responsibleNames = [...responsibleCheckboxes].map(cb => cb.value);
+                }
+
+                // --- ИСПРАВЛЕННАЯ ЛОГИКА ВАЛИДАЦИИ ---
+                if (!taskName || !projectName) {
+                    window.Telegram.WebApp.showAlert('Пожалуйста, заполните поля "Наименование" и "Проект".');
+                    return;
+                }
+                // Проверяем ответственного, только если это не обычный пользователь
+                if (userRole !== 'user' && responsibleNames.length === 0) {
+                    window.Telegram.WebApp.showAlert('Пожалуйста, выберите хотя бы одного ответственного.');
+                    return;
+                }
+                // ------------------------------------
+                
+                const allEmployees = getEmployeesCallback();
+                const responsibleUsers = allEmployees.filter(emp => responsibleNames.includes(emp.name));
+                const responsibleUserIds = responsibleUsers.map(emp => emp.userId);
+
+                onCreateTask({
+                    name: taskName,
+                    project: projectName,
+                    status: status,
+                    responsible: responsibleNames.join(', '),
+                    message: message,
+                    priority: 999,
+                    creatorId: window.currentUserId,
+                    responsibleUserIds: responsibleUserIds
+                });
+            }
         });
     });
-
-    document.addEventListener('submit', (e) => {
-        console.log('[modals.js] > Зафиксировано событие "submit".');
-        if (e.target && e.target.id === 'add-task-form') {
-            console.log('[modals.js] > Событие "submit" пришло от нашей формы #add-task-form.');
-            e.preventDefault();
-            const formData = new FormData(e.target);
-            const taskName = formData.get('name');
-            const projectName = formData.get('project');
-            const responsibleNames = formData.getAll('responsible[]');
-            const activeStatusElement = document.querySelector('#new-task-status-toggle .toggle-option.active');
-            const status = activeStatusElement ? activeStatusElement.dataset.status : 'В работе';
-
-            if (!taskName || !projectName || responsibleNames.length === 0) {
-                window.Telegram.WebApp.showAlert('Пожалуйста, заполните все поля: Название, Проект и Ответственный.');
-                return;
-            }
-            
-            const allEmployees = getEmployeesCallback();
-            const responsibleUsers = allEmployees.filter(emp => responsibleNames.includes(emp.name));
-            const responsibleUserIds = responsibleUsers.map(emp => emp.userId);
-
-            const taskData = {
-                name: taskName,
-                project: projectName,
-                status: status,
-                responsible: responsibleNames.join(', '),
-                message: formData.get('message'),
-                priority: 999,
-                creatorId: window.currentUserId,
-                responsibleUserIds: responsibleUserIds
-            };
-            console.log('[modals.js] > Данные собраны. Вызов onCreateTask с данными:', taskData);
-            onCreateTask(taskData);
-        } else {
-             console.log('[modals.js] > Событие "submit" пришло НЕ от нашей формы. ID формы:', e.target.id);
-        }
-    });
-    console.log('[modals.js] > Обработчики успешно установлены.');
 }

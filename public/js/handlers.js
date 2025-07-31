@@ -51,8 +51,11 @@ export async function handleSaveActiveTask() {
     }
 }
 
+
 export function handleShowAddTaskModal() {
-    modals.openAddTaskModal(store.getAllProjects(), store.getAllEmployees());
+    const appData = store.getAppData();
+    // Передаем роль и имя пользователя для настройки модального окна
+    modals.openAddTaskModal(store.getAllProjects(), store.getAllEmployees(), appData.userRole, appData.userName);
 }
 
 export async function handleCreateTask(taskData) {

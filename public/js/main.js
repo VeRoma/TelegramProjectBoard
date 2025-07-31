@@ -71,7 +71,7 @@ document.addEventListener('DOMContentLoaded', () => {
     mainContainer.addEventListener('dragstart', (e) => {
         const draggableCard = e.target.closest('[draggable="true"]');
         if (!draggableCard) return;
-        uiUtils.hideFab();
+        // uiUtils.hideFab();
         draggedElement = draggableCard;
         setTimeout(() => { 
             draggedElement.classList.add('dragging');
@@ -136,13 +136,20 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     mainContainer.addEventListener('dragend', () => {
+        // Убираем класс .dragging с элемента, который тащили
         if (draggedElement) {
             draggedElement.classList.remove('dragging');
         }
-        document.querySelectorAll('.drag-over, .drag-over-end').forEach(el => {
+        // Находим ВСЕ возможные элементы с подсветкой и убираем ее
+        const placeholders = document.querySelectorAll('.drag-over, .drag-over-end');
+        placeholders.forEach(el => {
             el.classList.remove('drag-over', 'drag-over-end');
         });
+
+        // Сбрасываем перетаскиваемый элемент
         draggedElement = null;
+
+        // Гарантированно показываем кнопку "+"
         uiUtils.showFab();
     });
 

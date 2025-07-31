@@ -256,6 +256,11 @@ body[style*="--tg-color-scheme: dark"] .task-status-checker {
     border-color: #a855f7;
 }
 
+.task-status-checker[data-status="К выполнению"] {
+    color: #ce3622;
+    border-color: #f2624f;
+}
+
 .status-toggle {
     display: flex;
     border-radius: 8px;
@@ -266,13 +271,33 @@ body[style*="--tg-color-scheme: dark"] .task-status-checker {
 
 .toggle-option {
     flex: 1;
-    padding: 10px;
-    text-align: center;
-    cursor: pointer;
-    background-color: var(--tg-theme-secondary-bg-color, #f0f0f0);
-    color: var(--tg-theme-text-color, #000000);
-    transition: background-color 0.2s, color 0.2s;
-    user-select: none;
+        padding: 8px;
+        /* Немного уменьшим паддинг */
+        text-align: center;
+        cursor: pointer;
+        background-color: var(--tg-theme-secondary-bg-color, #f0f0f0);
+        color: var(--tg-theme-text-color, #000000);
+        transition: background-color 0.2s, color 0.2s;
+        user-select: none;
+    
+        /* Новые стили для вертикального расположения */
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 4px;
+        /* Расстояние между иконкой и текстом */
+}
+
+.toggle-option .toggle-icon {
+    font-size: 1.5rem;
+    /* Увеличиваем иконку */
+}
+
+.toggle-option .toggle-text {
+    font-size: 0.75rem;
+    /* Размер как у <label> */
+    line-height: 1;
 }
 
 .toggle-option.active {
