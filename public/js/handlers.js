@@ -20,15 +20,19 @@ export async function handleSaveActiveTask() {
         return;
     }
 
+    // --- ИСПРАВЛЕНИЕ ЗДЕСЬ ---
     const updatedTask = {
-        ...taskInAppData,
+        ...taskInAppData, // Копируем все поля из хранилища
         name: activeEditElement.querySelector('.task-name-edit').value,
         message: activeEditElement.querySelector('.task-message-edit').value,
         status: activeEditElement.querySelector('.task-status-view').textContent,
         project: activeEditElement.querySelector('.task-project-view').textContent,
         responsible: selectedEmployees,
         version: parseInt(activeEditElement.dataset.version, 10),
+        // Явно добавляем приоритет, чтобы он гарантированно был в запросе
+        priority: taskInAppData.priority 
     };
+    // -------------------------
 
     try {
         const result = await api.saveTask({taskData: updatedTask, modifierName: appData.userName});
