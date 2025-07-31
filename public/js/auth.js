@@ -1,21 +1,13 @@
 import * as api from './api.js';
 import * as render from './ui/render.js';
 import * as uiUtils from './ui/utils.js';
+import * as store from './store.js'; // Импортируем наше хранилище
 
-/**
- * Получает ID пользователя из URL для отладки.
- * @returns {string|null}
- */
 function getDebugUserId() {
     const urlParams = new URLSearchParams(window.location.search);
     return urlParams.get('debug_user_id');
 }
 
-/**
- * Главная функция инициализации приложения.
- * Проверяет пользователя и загружает данные.
- * @returns {Promise<object|null>} - Возвращает данные приложения или null в случае ошибки.
- */
 export async function initializeApp() {
     api.logAction('App initializing');
     const tg = window.Telegram.WebApp;
@@ -23,7 +15,6 @@ export async function initializeApp() {
     const debugUserId = getDebugUserId();
 
     if (debugUserId) {
-        console.warn(`Включен режим отладки: используется ID пользователя ${debugUserId}`);
         user = { id: debugUserId, first_name: 'Debug', username: 'debuguser' };
     } else {
         user = tg.initDataUnsafe?.user;
@@ -31,7 +22,7 @@ export async function initializeApp() {
 
     if (!user || !user.id) {
         uiUtils.showAccessDeniedScreen();
-        return null;
+        return false; // Возвращаем false в случае неудачи
     }
 
     window.currentUserId = user.id;
@@ -43,21 +34,23 @@ export async function initializeApp() {
         if (verification.status === 'authorized') {
             uiUtils.setupUserInfo(verification.name);
             const data = await api.loadAppData({ user });
+            
             if (data && data.projects) {
+                // --- ГЛАВНОЕ ИЗМЕНЕНИЕ: Сохраняем данные в хранилище ---
+                store.setAppData(data);
+                
                 render.renderProjects(data.projects, data.userName, data.userRole);
-                // Устанавливаем dataset.version и dataset.task после рендеринга
+                
+                // Устанавливаем data-атрибуты после рендеринга
                 document.querySelectorAll('.task-details').forEach(el => {
                     const rowIndex = el.id.split('-')[2];
-                    const project = data.projects.find(p => p.tasks.some(t => t.rowIndex == rowIndex));
-                    if (project) {
-                        const task = project.tasks.find(t => t.rowIndex == rowIndex);
-                        if (task) {
-                            el.dataset.version = task.version;
-                            el.dataset.task = JSON.stringify(task).replace(/'/g, '&apos;');
-                        }
+                    const { task } = store.findTask(rowIndex);
+                    if (task) {
+                        el.dataset.version = task.version;
+                        el.dataset.task = JSON.stringify(task).replace(/'/g, '&apos;');
                     }
                 });
-                return data; // Возвращаем загруженные данные
+                return true; // Возвращаем true в случае успеха
             } else {
                 render.renderProjects([], verification.name, verification.role);
             }
@@ -71,5 +64,5 @@ export async function initializeApp() {
     } finally {
         uiUtils.hideLoading();
     }
-    return null;
+    return false;
 }

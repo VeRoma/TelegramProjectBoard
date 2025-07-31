@@ -24,8 +24,9 @@ export function renderProjects(projects, userName, userRole) {
     const appHeader = document.getElementById('app-header');
     const mainContainer = document.getElementById('main-content');
     appHeader.classList.add('hidden-header');
-    mainContainer.innerHTML = '<div id="projects-container" class="space-y-4"></div>';
-    const projectsContainer = document.getElementById('projects-container');
+    const projectsContainer = document.createElement('div');
+    projectsContainer.id = 'projects-container';
+    projectsContainer.className = 'space-y-4';
 
     if (!projects || projects.length === 0) {
         mainContainer.innerHTML = `<div class="p-4 rounded-lg text-center" style="background-color: var(--tg-theme-secondary-bg-color);">Проекты не найдены.</div>`;
@@ -34,13 +35,13 @@ export function renderProjects(projects, userName, userRole) {
 
     const isUserView = userRole === 'user';
 
+    // --- ФИНАЛЬНАЯ ЛОГИКА РЕНДЕРИНГА ---
+
     if (isUserView) {
-        // --- ЛОГИКА ДЛЯ ОБЫЧНОГО ПОЛЬЗОВАТЕЛЯ ---
-        let allUserTasks = [];
-        // Собираем все задачи из всех проектов, назначенных пользователю
-        projects.forEach(p => allUserTasks.push(...p.tasks));
+        // 1. Собираем ВСЕ задачи пользователя в ОДИН плоский массив
+        let allUserTasks = projects.flatMap(p => p.tasks);
         
-        // Фильтруем выполненные
+        // 2. Фильтруем выполненные
         allUserTasks = allUserTasks.filter(task => task.status !== 'Выполнено');
 
         if (allUserTasks.length === 0) {
@@ -48,15 +49,15 @@ export function renderProjects(projects, userName, userRole) {
             return;
         }
 
-        // Сортируем по статусу, затем по приоритету
+        // 3. Сортируем этот ЕДИНЫЙ массив по правилам
         allUserTasks.sort((a, b) => {
             const orderA = (STATUSES.find(s => s.name === a.status) || { order: 99 }).order;
             const orderB = (STATUSES.find(s => s.name === b.status) || { order: 99 }).order;
             if (orderA !== orderB) return orderA - orderB;
-            return (a.приоритет || 999) - (b.приоритет || 999);
+            return (a.priority || 999) - (b.priority || 999);
         });
 
-        // Группируем по статусам для отрисовки
+        // 4. Группируем и отрисовываем
         const tasksByStatus = allUserTasks.reduce((acc, task) => {
             if (!acc[task.status]) acc[task.status] = [];
             acc[task.status].push(task);
@@ -75,18 +76,22 @@ export function renderProjects(projects, userName, userRole) {
                     <div class="tasks-list space-y-2" data-status-group="${status}">
                         ${tasksInGroup.map(task => renderTaskCard(task, true)).join('')}
                     </div>
-                </div>`;
+                </div>
+            `;
         });
         projectsContainer.innerHTML = userHtml;
 
-    } else { // --- ЛОГИКА ДЛЯ АДМИНА/ВЛАДЕЛЬЦА ---
+    } else { // Вид для admin/owner
         projects.forEach(project => {
+            // Сортируем задачи ВНУТРИ каждого проекта
             project.tasks.sort((a, b) => {
                 const orderA = (STATUSES.find(s => s.name === a.status) || { order: 99 }).order;
                 const orderB = (STATUSES.find(s => s.name === b.status) || { order: 99 }).order;
                 if (orderA !== orderB) return orderA - orderB;
-                return (a.приоритет || 999) - (b.приоритет || 999);
+                return (a.priority || 999) - (b.priority || 999);
             });
+
+            if (project.tasks.length === 0) return;
 
             const projectCard = document.createElement('div');
             projectCard.className = 'card rounded-xl shadow-md overflow-hidden';
@@ -124,6 +129,9 @@ export function renderProjects(projects, userName, userRole) {
             projectsContainer.appendChild(projectCard);
         });
     }
+
+    mainContainer.innerHTML = '';
+    mainContainer.appendChild(projectsContainer);
 }
 
 export function renderTaskDetails(detailsContainer) {

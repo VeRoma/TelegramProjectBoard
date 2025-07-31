@@ -161,7 +161,7 @@ export function setupModals(onStatusChange, onCreateTask, getEmployeesCallback) 
                 status: status,
                 responsible: responsibleNames.join(', '),
                 message: formData.get('message'),
-                приоритет: 999,
+                priority: 999,
                 creatorId: window.currentUserId,
                 responsibleUserIds: responsibleUserIds
             };

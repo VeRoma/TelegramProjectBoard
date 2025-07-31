@@ -2,35 +2,19 @@ import * as api from './api.js';
 import * as render from './ui/render.js';
 import * as modals from './ui/modals.js';
 import * as uiUtils from './ui/utils.js';
+import * as store from './store.js';
 import { STATUSES } from './data/statuses.js';
-
-export let appData = {};
-let allProjects = [];
-let allEmployees = [];
-
-export function setInitialData(initialData) {
-    if (!initialData) return;
-    appData = initialData;
-    allProjects = initialData.allProjects || [];
-    allEmployees = initialData.allEmployees || [];
-}
-
-export function getEmployees() {
-    return allEmployees;
-}
 
 export async function handleSaveActiveTask() {
     const tg = window.Telegram.WebApp;
     const activeEditElement = document.querySelector('.task-details.edit-mode');
     if (!activeEditElement) return;
 
+    const appData = store.getAppData();
     const responsibleText = activeEditElement.querySelector('.task-responsible-view').textContent;
     const selectedEmployees = responsibleText ? responsibleText.split(',').map(s => s.trim()).filter(Boolean) : [];
     
-    const taskInAppData = appData.projects
-        .flatMap(p => p.tasks)
-        .find(t => t.rowIndex == activeEditElement.querySelector('.task-row-index').value);
-
+    const { task: taskInAppData } = store.findTask(activeEditElement.querySelector('.task-row-index').value);
     if (!taskInAppData) {
         tg.showAlert('Не удалось найти исходную задачу для сохранения.');
         return;
@@ -51,9 +35,7 @@ export async function handleSaveActiveTask() {
         if (result.status === 'success') {
             uiUtils.showToast('Изменения сохранены', 'success');
             tg.HapticFeedback.notificationOccurred('success');
-            
             Object.assign(taskInAppData, updatedTask, {version: result.newVersion});
-
             uiUtils.exitEditMode(activeEditElement);
             uiUtils.updateFabButtonUI(false, handleSaveActiveTask, handleShowAddTaskModal);
             render.renderProjects(appData.projects, appData.userName, appData.userRole);
@@ -70,11 +52,12 @@ export async function handleSaveActiveTask() {
 }
 
 export function handleShowAddTaskModal() {
-    modals.openAddTaskModal(allProjects, allEmployees);
+    modals.openAddTaskModal(store.getAllProjects(), store.getAllEmployees());
 }
 
 export async function handleCreateTask(taskData) {
     const tg = window.Telegram.WebApp;
+    const appData = store.getAppData();
     const tempRowIndex = `temp_${Date.now()}`;
     const optimisticTask = { ...taskData, rowIndex: tempRowIndex, version: 0 };
     let targetProject = appData.projects.find(p => p.name === optimisticTask.project);
@@ -82,9 +65,6 @@ export async function handleCreateTask(taskData) {
     if (!targetProject) {
         targetProject = { name: optimisticTask.project, tasks: [] };
         appData.projects.push(targetProject);
-        if (!allProjects.includes(optimisticTask.project)) {
-             allProjects.push(optimisticTask.project);
-        }
     }
     targetProject.tasks.push(optimisticTask);
     modals.closeAddTaskModal();
@@ -115,68 +95,70 @@ export async function handleCreateTask(taskData) {
 
 export async function handleStatusUpdate(rowIndex, newStatus) {
     const tg = window.Telegram.WebApp;
-    const project = appData.projects.find(p => p.tasks.some(t => t.rowIndex == rowIndex));
-    if (!project) return;
-    const task = project.tasks.find(t => t.rowIndex == rowIndex);
-    if (!task || task.status === newStatus) return;
-
+    const appData = store.getAppData();
+    const { task, project } = store.findTask(rowIndex);
+    if (!task || !project) return;
+    
     const oldStatus = task.status;
-    const oldPriority = task.приоритет;
-
+    const oldPriority = task.priority;
     task.status = newStatus;
     
-    if (newStatus === 'Выполнено') {
-        task.приоритет = 999;
-    } else {
-        const tasksInNewGroup = project.tasks.filter(t => t.status === newStatus && t.rowIndex !== task.rowIndex);
-        const maxPriority = Math.max(0, ...tasksInNewGroup.map(t => t.приоритет));
-        task.приоритет = maxPriority + 1;
-    }
+    // --- ИСПРАВЛЕННАЯ ЛОГИКА ---
+    // Собираем все задачи для пересчета в зависимости от роли
+    const allTasksForScope = (appData.userRole === 'user') 
+        ? appData.projects.flatMap(p => p.tasks)
+        : project.tasks;
 
-    const tasksInOldGroup = project.tasks.filter(t => t.status === oldStatus);
-    tasksInOldGroup.sort((a, b) => a.приоритет - b.приоритет).forEach((t, index) => {
-        t.приоритет = index + 1;
+    if (newStatus === 'Выполнено') {
+        task.priority = 999;
+    } else {
+        const tasksInNewGroup = allTasksForScope.filter(t => t.status === newStatus && t.rowIndex !== task.rowIndex);
+        const maxPriority = Math.max(0, ...tasksInNewGroup.map(t => t.priority));
+        task.priority = maxPriority + 1;
+    }
+    const tasksInOldGroup = allTasksForScope.filter(t => t.status === oldStatus);
+    tasksInOldGroup.sort((a, b) => a.priority - b.priority).forEach((t, index) => {
+        t.priority = index + 1;
     });
 
     render.renderProjects(appData.projects, appData.userName, appData.userRole);
     uiUtils.showToast('Статус обновлён, идет сохранение...');
     
-    // --- ИЗМЕНЕНИЕ ЗДЕСЬ: Добавляем 'name' для логов ---
     const tasksToUpdate = [...tasksInOldGroup, task].map(t => ({
         rowIndex: t.rowIndex,
-        приоритет: t.приоритет,
-        status: t.status,
-        name: t.name // Добавляем имя для логгирования
+        priority: t.priority,
+        status: t.status
     }));
 
     try {
         const result = await api.updatePriorities({tasks: tasksToUpdate, modifierName: appData.userName});
-        if (result.status === 'success') {
-            uiUtils.showToast('Сохранение завершено', 'success');
-        } else {
-            throw new Error(result.error || 'Ошибка сохранения на сервере');
-        }
+        if (result.status !== 'success') throw new Error(result.error || 'Ошибка сохранения');
+        uiUtils.showToast('Сохранение завершено', 'success');
     } catch (error) {
         tg.showAlert('Не удалось сохранить изменения: ' + error.message);
         task.status = oldStatus;
-        task.приоритет = oldPriority;
+        task.priority = oldPriority;
         window.location.reload();
     }
 }
 
+// --- ФИНАЛЬНАЯ ВЕРСИЯ DRAG-N-DROP ---
 export function handleDragDrop(projectName, updatedTaskIdsInGroup) {
-    const projectData = appData.projects.find(p => p.name === projectName);
-    if (!projectData) return;
-
-    const taskMap = new Map(projectData.tasks.map(t => [t.rowIndex.toString(), t]));
+    const appData = store.getAppData();
+    
+    // --- ИСПРАВЛЕННАЯ ЛОГИКА ---
+    // Вне зависимости от роли, мы всегда работаем с полным списком задач
+    const allTasks = appData.projects.flatMap(p => p.tasks);
+    const taskMap = new Map(allTasks.map(t => [t.rowIndex.toString(), t]));
 
     const tasksToUpdate = updatedTaskIdsInGroup.map((id, index) => {
         const task = taskMap.get(id);
         if (task) {
-            task.приоритет = index + 1;
-            return { rowIndex: task.rowIndex, приоритет: task.приоритет };
+            task.priority = index + 1;
+            return { rowIndex: task.rowIndex, priority: task.priority };
         }
     }).filter(Boolean);
+    print(tasksToUpdate);
 
     render.renderProjects(appData.projects, appData.userName, appData.userRole);
     uiUtils.showToast('Идет сохранение нового порядка задач...');
@@ -193,4 +175,9 @@ export function handleDragDrop(projectName, updatedTaskIdsInGroup) {
             window.Telegram.WebApp.showAlert('Не удалось сохранить новый порядок задач: ' + error.message);
             window.location.reload();
         });
+}
+
+// Ваша отладочная функция
+function print (message) {
+    window.Telegram.WebApp.showAlert(JSON.stringify(message, null, 2), 'OK'); 
 }

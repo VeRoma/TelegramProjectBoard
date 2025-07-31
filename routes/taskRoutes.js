@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const googleSheetsService = require('../dataAccess/googleSheetsService');
 const telegramService = require('../dataAccess/telegramService');
-const { TASK_COLUMNS, ERROR_MESSAGES, EMPLOYEE_ROLES, SHEET_NAMES } = require('../config/constants');
+const { SHEET_NAMES, TASK_COLUMNS, EMPLOYEE_ROLES, ERROR_MESSAGES } = require('../config/constants');
 
 router.use(googleSheetsService.loadSheetDataMiddleware);
 
@@ -44,7 +44,8 @@ router.post('/appdata', async (req, res) => {
                 version: parseInt(row.get(TASK_COLUMNS.VERSION) || 0, 10),
                 rowIndex: parseInt(row.get(TASK_COLUMNS.ROW_INDEX) || row.rowNumber, 10),
                 project: projectName,
-                приоритет: parseInt(row.get(TASK_COLUMNS.PRIORITY), 10) || 99,
+                // --- ИСПРАВЛЕНИЕ: Используем ключ 'priority' ---
+                priority: parseInt(row.get(TASK_COLUMNS.PRIORITY), 10) || 999,
                 modifiedBy: row.get(TASK_COLUMNS.MODIFIED_BY),
                 modifiedAt: row.get(TASK_COLUMNS.MODIFIED_AT)
             });
@@ -103,7 +104,7 @@ router.post('/addtask', async (req, res) => {
         if (newTaskData.responsibleUserIds && newTaskData.creatorId) {
             newTaskData.responsibleUserIds.forEach(userId => {
                 if (userId !== newTaskData.creatorId) {
-                    telegramService.sendNewTaskNotification(userId, newTaskData.name, newTaskData.приоритет === 1);
+                    telegramService.sendNewTaskNotification(userId, newTaskData.name, newTaskData.priority === 1);
                 }
             });
         }
@@ -113,7 +114,7 @@ router.post('/addtask', async (req, res) => {
             status: newRow.get(TASK_COLUMNS.STATUS),
             responsible: newRow.get(TASK_COLUMNS.RESPONSIBLE),
             message: newRow.get(TASK_COLUMNS.MESSAGE),
-            приоритет: parseInt(newRow.get(TASK_COLUMNS.PRIORITY), 10) || 99,
+            priority: parseInt(newRow.get(TASK_COLUMNS.PRIORITY), 10) || 999,
             version: parseInt(newRow.get(TASK_COLUMNS.VERSION), 10) || 0,
             rowIndex: parseInt(newRow.get(TASK_COLUMNS.ROW_INDEX), 10) || newRow.rowNumber,
             modifiedBy: newRow.get(TASK_COLUMNS.MODIFIED_BY),

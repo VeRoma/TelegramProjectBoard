@@ -4,7 +4,7 @@ import * as modals from './ui/modals.js';
 import * as uiUtils from './ui/utils.js';
 import * as auth from './auth.js';
 import * as handlers from './handlers.js';
-import { appData } from './handlers.js';
+import * as store from './store.js'; // Импортируем хранилище
 
 document.addEventListener('DOMContentLoaded', () => {
     const tg = window.Telegram.WebApp;
@@ -39,8 +39,8 @@ document.addEventListener('DOMContentLoaded', () => {
             const modalType = modalTrigger.dataset.modalType;
             const activeTaskDetailsElement = modalTrigger.closest('.task-details');
             if (modalType === 'status') modals.openStatusModal(activeTaskDetailsElement);
-            else if (modalType === 'employee') modals.openEmployeeModal(activeTaskDetailsElement, handlers.getEmployees());
-            else if (modalType === 'project') modals.openProjectModal(activeTaskDetailsElement, handlers.allProjects);
+            else if (modalType === 'employee') modals.openEmployeeModal(activeTaskDetailsElement, store.getAllEmployees());
+            else if (modalType === 'project') modals.openProjectModal(activeTaskDetailsElement, store.getAllProjects());
             return;
         }
         const taskHeader = event.target.closest('.task-header');
@@ -109,20 +109,20 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    mainContainer.addEventListener('drop', (e) => {
+    mainContainer.addEventListener('drop', (e) => { // Обработчик события drop
         e.preventDefault();
         if (!draggedElement) return;
         
-        const dropContainer = e.target.closest(`.tasks-list[data-status-group="${draggedElement.dataset.statusGroup}"]`);
+        const dropContainer = e.target.closest(`.tasks-list[data-status-group="${draggedElement.dataset.statusGroup}"]`);   // Ищем контейнер для сброса
         if (!dropContainer) {
              mainContainer.dispatchEvent(new Event('dragend'));
              return;
         };
-        const afterElement = getDragAfterElement(dropContainer, e.clientY);
+        const afterElement = getDragAfterElement(dropContainer, e.clientY); // Получаем элемент после которого нужно вставить перетаскиваемый элемент
         if (afterElement) {
-            dropContainer.insertBefore(draggedElement, afterElement);
+            dropContainer.insertBefore(draggedElement, afterElement);   // Вставляем перетаскиваемый элемент перед найденным элементом
         } else {
-            dropContainer.appendChild(draggedElement);
+            dropContainer.appendChild(draggedElement);  // Если нет элемента после которого нужно вставить, добавляем в конец
         }
         
         const taskDataString = draggedElement.querySelector('.task-details').dataset.task;
@@ -169,11 +169,10 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     async function startApp() {
-        const initialData = await auth.initializeApp();
-        if (initialData) {
-            handlers.setInitialData(initialData);
-            modals.setupModals(handlers.handleStatusUpdate, handlers.handleCreateTask, handlers.getEmployees);
-            uiUtils.updateFabButtonUI(false, handlers.handleSaveActiveTask, handlers.handleShowAddTaskModal);
+        const success = await auth.initializeApp();
+        if (success) {
+            modals.setupModals(handlers.handleStatusUpdate, handlers.handleCreateTask, store.getAllEmployees);
+            uiUtils.updateFabButtonUI(false, handlers.handleShowAddTaskModal, handlers.handleShowAddTaskModal);
         }
     }
 
