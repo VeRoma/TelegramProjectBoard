@@ -14,8 +14,7 @@ function renderTaskCard(task, isUserView) {
                     <div class="task-status-checker status-action-area" data-status="${task.status}">
                         ${statusIcon}
                     </div>
-                </div>
-                
+                </div>                
                 <div id="task-details-${task.rowIndex}" class="task-details collapsible-content px-4 pb-4" data-version="${task.version}" data-task='${taskDataString}'></div>
             </div>`;
 }
