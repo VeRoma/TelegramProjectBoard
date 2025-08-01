@@ -4,7 +4,7 @@ import * as modals from './ui/modals.js';
 import * as uiUtils from './ui/utils.js';
 import * as auth from './auth.js';
 import * as handlers from './handlers.js';
-import * as store from './store.js'; // Импортируем хранилище
+import * as store from './store.js';
 
 document.addEventListener('DOMContentLoaded', () => {
     const tg = window.Telegram.WebApp;
@@ -194,7 +194,8 @@ document.addEventListener('DOMContentLoaded', () => {
             const appData = store.getAppData();
             // -------------------------
 
-            modals.setupModals(handlers.handleStatusUpdate, handlers.handleCreateTask, store.getAllEmployees, appData.userRole, appData.userName);
+            modals.setupModals(handlers.handleStatusUpdate, store.getAllEmployees);
+            
             uiUtils.updateFabButtonUI(false, handlers.handleShowAddTaskModal, handlers.handleShowAddTaskModal);
         }
     }

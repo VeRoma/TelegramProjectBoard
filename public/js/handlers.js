@@ -16,8 +16,7 @@ export async function handleSaveActiveTask() {
     
     const { task: taskInAppData } = store.findTask(activeEditElement.querySelector('.task-row-index').value);
     if (!taskInAppData) {
-        tg.showAlert('Не удалось найти исходную задачу для сохранения.');
-        return;
+        return tg.showAlert('Не удалось найти исходную задачу для сохранения.');
     }
 
     const updatedTask = {
@@ -35,20 +34,15 @@ export async function handleSaveActiveTask() {
         if (result.status === 'success') {
             uiUtils.showToast('Изменения сохранены', 'success');
             tg.HapticFeedback.notificationOccurred('success');
-            
-            // Обновляем данные в хранилище
             Object.assign(taskInAppData, updatedTask, {version: result.newVersion});
             
-            // --- ИСПРАВЛЕНИЕ ЗДЕСЬ: Синхронизируем data-атрибуты в DOM ---
             activeEditElement.dataset.task = JSON.stringify(taskInAppData).replace(/'/g, '&apos;');
             activeEditElement.dataset.version = result.newVersion;
-            // --------------------------------------------------------
 
             uiUtils.exitEditMode(activeEditElement);
             uiUtils.updateFabButtonUI(false, handleSaveActiveTask, handleShowAddTaskModal);
-            render.renderProjects(appData.projects, appData.userName, appData.userRole);
         } else {
-            if (result.error && result.error.includes("изменены другим пользователем")) {
+            if (result.error?.includes("изменены другим пользователем")) {
                 tg.showAlert(result.error + '\nТекущие данные будут обновлены.', () => window.location.reload());
             } else {
                 tg.showAlert('Ошибка сохранения: ' + (result.error || 'Неизвестная ошибка'));
@@ -59,27 +53,76 @@ export async function handleSaveActiveTask() {
     }
 }
 
-
+// --- ИЗМЕНЕНИЕ: Эта функция теперь будет менять FAB-кнопку ---
 export function handleShowAddTaskModal() {
     const appData = store.getAppData();
-    // Передаем роль и имя пользователя для настройки модального окна
     modals.openAddTaskModal(store.getAllProjects(), store.getAllEmployees(), appData.userRole, appData.userName);
-
+    // Переключаем FAB в режим "Сохранить" и назначаем новый обработчик
+    uiUtils.updateFabButtonUI(true, handleSaveNewTaskClick);
 }
+
+// --- НОВАЯ ФУНКЦИЯ: Обработчик для FAB-кнопки в режиме создания ---
+export function handleSaveNewTaskClick() {
+    const tg = window.Telegram.WebApp;
+    const appData = store.getAppData();
+    
+    const taskName = document.getElementById('new-task-name')?.value;
+    const projectName = document.getElementById('new-task-project')?.value;
+    const message = document.getElementById('new-task-message')?.value;
+    const activeStatusElement = document.querySelector('#new-task-status-toggle .toggle-option.active');
+    const status = activeStatusElement ? activeStatusElement.dataset.status : 'К выполнению';
+
+    let responsibleNames = [];
+    if (appData.userRole === 'user') {
+        responsibleNames = [appData.userName];
+    } else {
+        const responsibleCheckboxes = document.querySelectorAll('#add-task-modal .employee-checkbox:checked');
+        responsibleNames = [...responsibleCheckboxes].map(cb => cb.value);
+    }
+
+    if (!taskName || !projectName || (appData.userRole !== 'user' && responsibleNames.length === 0)) {
+        return tg.showAlert('Пожалуйста, заполните поля: Наименование, Проект и Ответственный.');
+    }
+
+    const allEmployees = store.getAllEmployees();
+    const responsibleUsers = allEmployees.filter(emp => responsibleNames.includes(emp.name));
+    const responsibleUserIds = responsibleUsers.map(emp => emp.userId);
+
+    handleCreateTask({
+        name: taskName,
+        project: projectName,
+        status: status,
+        responsible: responsibleNames.join(', '),
+        message: message,
+        creatorId: window.currentUserId,
+        responsibleUserIds: responsibleUserIds
+    });
+}
+
 
 export async function handleCreateTask(taskData) {
     const tg = window.Telegram.WebApp;
     const appData = store.getAppData();
+    
+    const allTasksForScope = (appData.userRole === 'user')
+        ? appData.projects.flatMap(p => p.tasks)
+        : (appData.projects.find(p => p.name === taskData.project) || {tasks: []}).tasks;
+
+    const tasksInGroup = allTasksForScope.filter(t => t.status === taskData.status);
+    const maxPriority = Math.max(0, ...tasksInGroup.map(t => t.priority));
+    taskData.priority = maxPriority + 1;
+    
     const tempRowIndex = `temp_${Date.now()}`;
     const optimisticTask = { ...taskData, rowIndex: tempRowIndex, version: 0 };
     let targetProject = appData.projects.find(p => p.name === optimisticTask.project);
-
     if (!targetProject) {
         targetProject = { name: optimisticTask.project, tasks: [] };
         appData.projects.push(targetProject);
     }
     targetProject.tasks.push(optimisticTask);
-    modals.closeAddTaskModal();
+    
+    modals.closeAddTaskModal(); // Эта функция теперь также сбросит FAB-кнопку
+    
     render.renderProjects(appData.projects, appData.userName, appData.userRole);
     uiUtils.showToast('Задача добавлена, идет сохранение...');
     tg.HapticFeedback.notificationOccurred('success');
@@ -87,13 +130,8 @@ export async function handleCreateTask(taskData) {
         const result = await api.addTask({newTaskData: taskData, creatorName: appData.userName});
         if (result.status === 'success' && result.task) {
             const finalTask = result.task;
-            const projectToUpdate = appData.projects.find(p => p.name === finalTask.project);
-            if (projectToUpdate) {
-                const taskToUpdate = projectToUpdate.tasks.find(t => t.rowIndex === tempRowIndex);
-                if (taskToUpdate) {
-                    Object.assign(taskToUpdate, finalTask);
-                }
-            }
+            const taskToUpdate = targetProject.tasks.find(t => t.rowIndex === tempRowIndex);
+            if (taskToUpdate) Object.assign(taskToUpdate, finalTask);
             render.renderProjects(appData.projects, appData.userName, appData.userRole);
             uiUtils.showToast('Задача успешно сохранена', 'success');
         } else {
@@ -104,6 +142,8 @@ export async function handleCreateTask(taskData) {
         window.location.reload();
     }
 }
+
+
 
 export async function handleStatusUpdate(rowIndex, newStatus) {
     const tg = window.Telegram.WebApp;

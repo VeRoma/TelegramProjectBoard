@@ -166,6 +166,7 @@ body {
 
 #fab-button {
     margin-right: 60px;
+    z-index: 60;
 }
 
 .modal-select-btn {
