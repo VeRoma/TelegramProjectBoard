@@ -69,13 +69,24 @@ document.addEventListener('DOMContentLoaded', () => {
     let draggedElement = null;
 
     mainContainer.addEventListener('dragstart', (e) => {
+        // --- ИСПРАВЛЕНИЕ: Блокируем перетаскивание в режиме редактирования ---
+        const isEditing = document.querySelector('.task-details.edit-mode');
+        if (isEditing) {
+            e.preventDefault(); // Отменяем стандартное поведение
+            return; // Прерываем выполнение
+        }
+        // ----------------------------------------------------------------
+
         const draggableCard = e.target.closest('[draggable="true"]');
         if (!draggableCard) return;
-        // uiUtils.hideFab();
+        
         draggedElement = draggableCard;
-        setTimeout(() => { 
-            draggedElement.classList.add('dragging');
+        
+        setTimeout(() => {
+            if (draggedElement) draggedElement.classList.add('dragging');
         }, 0);
+        
+        uiUtils.hideFab();
     });
 
     function getDragAfterElement(container, y) {

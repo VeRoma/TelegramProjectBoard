@@ -20,26 +20,30 @@ export async function handleSaveActiveTask() {
         return;
     }
 
-    // --- ИСПРАВЛЕНИЕ ЗДЕСЬ ---
     const updatedTask = {
-        ...taskInAppData, // Копируем все поля из хранилища
+        ...taskInAppData,
         name: activeEditElement.querySelector('.task-name-edit').value,
         message: activeEditElement.querySelector('.task-message-edit').value,
         status: activeEditElement.querySelector('.task-status-view').textContent,
         project: activeEditElement.querySelector('.task-project-view').textContent,
         responsible: selectedEmployees,
         version: parseInt(activeEditElement.dataset.version, 10),
-        // Явно добавляем приоритет, чтобы он гарантированно был в запросе
-        priority: taskInAppData.priority 
     };
-    // -------------------------
 
     try {
         const result = await api.saveTask({taskData: updatedTask, modifierName: appData.userName});
         if (result.status === 'success') {
             uiUtils.showToast('Изменения сохранены', 'success');
             tg.HapticFeedback.notificationOccurred('success');
+            
+            // Обновляем данные в хранилище
             Object.assign(taskInAppData, updatedTask, {version: result.newVersion});
+            
+            // --- ИСПРАВЛЕНИЕ ЗДЕСЬ: Синхронизируем data-атрибуты в DOM ---
+            activeEditElement.dataset.task = JSON.stringify(taskInAppData).replace(/'/g, '&apos;');
+            activeEditElement.dataset.version = result.newVersion;
+            // --------------------------------------------------------
+
             uiUtils.exitEditMode(activeEditElement);
             uiUtils.updateFabButtonUI(false, handleSaveActiveTask, handleShowAddTaskModal);
             render.renderProjects(appData.projects, appData.userName, appData.userRole);

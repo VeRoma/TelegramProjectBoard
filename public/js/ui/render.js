@@ -2,7 +2,6 @@ import { STATUSES } from '../data/statuses.js';
 
 function renderTaskCard(task, isUserView) {
     const taskDataString = JSON.stringify(task).replace(/'/g, '&apos;');
-    // В режиме пользователя всегда показываем проект, к которому относится задача
     const headerTopLine = isUserView ? task.project : (task.responsible || 'Не назначен');
     const statusIcon = (STATUSES.find(s => s.name === task.status) || {}).icon || '';
 
@@ -16,7 +15,8 @@ function renderTaskCard(task, isUserView) {
                         ${statusIcon}
                     </div>
                 </div>
-                <div id="task-details-${task.rowIndex}" class="task-details collapsible-content px-4 pb-4" data-task='${taskDataString}'></div>
+                
+                <div id="task-details-${task.rowIndex}" class="task-details collapsible-content px-4 pb-4" data-version="${task.version}" data-task='${taskDataString}'></div>
             </div>`;
 }
 
