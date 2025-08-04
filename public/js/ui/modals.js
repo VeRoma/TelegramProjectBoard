@@ -29,7 +29,9 @@ export function openStatusModal(activeTaskDetailsElement) {
 export function openEmployeeModal(activeTaskDetailsElement, allEmployees) {
     document.body.classList.add('overflow-hidden');
     const currentResponsible = activeTaskDetailsElement.querySelector('.task-responsible-view').textContent.split(',').map(n => n.trim());
-    const userEmployees = allEmployees.filter(e => e.role === 'user').map(e => e.name);
+
+    const userEmployees = allEmployees.map(e => e.name);
+
     employeeModal.innerHTML = `<div class="modal-content"><div class="p-4 border-b" style="border-color: var(--tg-theme-hint-color);"><h3 class="text-lg font-bold">Выберите ответственных</h3></div><div class="modal-body modal-body-employee">${userEmployees.map(e => `<label class="flex items-center space-x-3 p-3 rounded-md hover:bg-gray-200"><input type="checkbox" value="${e}" ${currentResponsible.includes(e) ? 'checked' : ''} class="employee-checkbox w-4 h-4 rounded"><span>${e}</span></label>`).join('')}</div><div class="p-2 border-t flex justify-end" style="border-color: var(--tg-theme-hint-color);"><button class="modal-select-btn px-4 py-2 rounded-lg">Выбрать</button></div></div>`;
     employeeModal.classList.add('active');
     employeeModal.dataset.targetElement = `#${activeTaskDetailsElement.id || (activeTaskDetailsElement.id = `task-${Date.now()}`)}`;
@@ -50,8 +52,8 @@ export function openAddTaskModal(allProjects, allEmployees, userRole, userName) 
     
     let responsibleHtml = '';
     if (userRole !== 'user') {
-        const userEmployees = allEmployees.filter(e => e.role === 'user');
-        const employeesCheckboxes = userEmployees.map(e => `<label class="flex items-center space-x-3 p-3 rounded-md hover:bg-gray-200"><input type="checkbox" value="${e.name}" class="employee-checkbox w-4 h-4 rounded"><span>${e.name}</span></label>`).join('');
+
+        const employeesCheckboxes = allEmployees.map(e => `<label class="flex items-center space-x-3 p-3 rounded-md hover:bg-gray-200"><input type="checkbox" value="${e.name}" class="employee-checkbox w-4 h-4 rounded"><span>${e.name}</span></label>`).join('');
         responsibleHtml = `
             <div>
                 <label class="text-xs font-medium text-gray-500">Ответственные</label>
