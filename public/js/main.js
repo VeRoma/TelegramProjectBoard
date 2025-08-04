@@ -15,7 +15,10 @@ document.addEventListener('DOMContentLoaded', () => {
         if (statusActionArea) {
             const taskCard = statusActionArea.closest('[data-task-id]');
             const detailsContainer = taskCard.querySelector('.task-details');
-            if (!detailsContainer.innerHTML) render.renderTaskDetails(detailsContainer);
+            if (!detailsContainer.innerHTML) {
+                const appData = store.getAppData();
+                render.renderTaskDetails(detailsContainer, appData.userRole);
+            }
             modals.openStatusModal(detailsContainer);
             return;
         }
@@ -39,7 +42,10 @@ document.addEventListener('DOMContentLoaded', () => {
             const modalType = modalTrigger.dataset.modalType;
             const activeTaskDetailsElement = modalTrigger.closest('.task-details');
             if (modalType === 'status') modals.openStatusModal(activeTaskDetailsElement);
-            else if (modalType === 'employee') modals.openEmployeeModal(activeTaskDetailsElement, store.getAllEmployees());
+            else if (modalType === 'employee') {
+                const appData = store.getAppData();
+                modals.openEmployeeModal(activeTaskDetailsElement, store.getAllEmployees(), appData.userRole);
+            }
             else if (modalType === 'project') modals.openProjectModal(activeTaskDetailsElement, store.getAllProjects());
             return;
         }
@@ -53,7 +59,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 currentlyOpen.classList.remove('expanded');
                 setTimeout(() => { currentlyOpen.innerHTML = ''; }, 300);
             }
-            if (!detailsContainer.innerHTML) render.renderTaskDetails(detailsContainer);
+            if (!detailsContainer.innerHTML) {
+                const appData = store.getAppData();
+                render.renderTaskDetails(detailsContainer, appData.userRole);
+            }
             detailsContainer.classList.toggle('expanded');
             if (!detailsContainer.classList.contains('expanded')) {
                 setTimeout(() => { detailsContainer.innerHTML = ''; }, 300);
@@ -86,7 +95,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (draggedElement) draggedElement.classList.add('dragging');
         }, 0);
         
-        uiUtils.hideFab();
+        // uiUtils.hideFab();
     });
 
     function getDragAfterElement(container, y) {
@@ -186,16 +195,12 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-   async function startApp() {
+    async function startApp() {
         const success = await auth.initializeApp();
         if (success) {
-            // --- ИСПРАВЛЕНИЕ ЗДЕСЬ ---
-            // Получаем актуальные данные из хранилища после инициализации
             const appData = store.getAppData();
-            // -------------------------
-
-             modals.setupModals(handlers.handleStatusUpdate, store.getAllEmployees);
-            
+            // Передаем роль и имя пользователя для настройки модальных окон
+            modals.setupModals(handlers.handleStatusUpdate, handlers.handleCreateTask, store.getAllEmployees, appData.userRole, appData.userName);
             uiUtils.updateFabButtonUI(false, handlers.handleShowAddTaskModal, handlers.handleShowAddTaskModal);
         }
     }

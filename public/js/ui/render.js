@@ -124,8 +124,35 @@ export function renderProjects(projects, userName, userRole) {
     mainContainer.appendChild(projectsContainer);
 }
 
-export function renderTaskDetails(detailsContainer) {
+export function renderTaskDetails(detailsContainer, userRole) {
     const task = JSON.parse(detailsContainer.dataset.task);
+
+    // В зависимости от роли, создаем разный HTML для поля "Ответственный"
+    let responsibleFieldHtml = '';
+    if (userRole === 'user') {
+        // Для user'а - простое текстовое поле без возможности редактирования
+        responsibleFieldHtml = `
+            <div>
+                <label class="text-xs font-medium text-gray-500">Ответственный</label>
+                <div class="view-field mt-1">
+                    <p class="task-responsible-view">${task.responsible || '...'}</p>
+                </div>
+            </div>`;
+    } else {
+        // Для admin/owner - поле с возможностью вызова модального окна
+        responsibleFieldHtml = `
+            <div>
+                <label class="text-xs font-medium text-gray-500">Ответственный</label>
+                <div class="view-field mt-1">
+                    <p class="task-responsible-view">${task.responsible || '...'}</p>
+                </div>
+                <div class="edit-field modal-trigger-field mt-1 p-2 border rounded-md" data-modal-type="employee" style="border-color: var(--tg-theme-hint-color);">
+                    <p class="task-responsible-view truncate pr-2">${task.responsible || '...'}</p>
+                    <svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                </div>
+            </div>`;
+    }
+
     detailsContainer.innerHTML = `
         <div class="p-4 rounded-lg space-y-4 edit-container">
             <input type="hidden" class="task-row-index" value="${task.rowIndex}">
@@ -143,10 +170,7 @@ export function renderTaskDetails(detailsContainer) {
                 <div class="view-field mt-1"><p class="task-project-view">${task.project}</p></div>
                 <div class="edit-field modal-trigger-field mt-1 p-2 border rounded-md" data-modal-type="project" style="border-color: var(--tg-theme-hint-color);"><p class="task-project-view">${task.project}</p><svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg></div>
             </div>
-            <div><label class="text-xs font-medium text-gray-500">Ответственный</label>
-                <div class="view-field mt-1"><p class="task-responsible-view">${task.responsible || '...'}</p></div>
-                <div class="edit-field modal-trigger-field mt-1 p-2 border rounded-md" data-modal-type="employee" style="border-color: var(--tg-theme-hint-color);"><p class="task-responsible-view truncate pr-2">${task.responsible || '...'}</p><svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg></div>
-            </div>
+            ${responsibleFieldHtml}
             <div class="text-xs mt-2" style="color: var(--tg-theme-hint-color);">
                 <span>Последнее изменение: ${task.modifiedBy || 'N/A'} (${task.modifiedAt || 'N/A'})</span>
             </div>

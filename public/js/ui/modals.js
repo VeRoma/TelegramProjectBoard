@@ -26,13 +26,39 @@ export function openStatusModal(activeTaskDetailsElement) {
     statusModal.dataset.targetElement = `#${activeTaskDetailsElement.id || (activeTaskDetailsElement.id = `task-${Date.now()}`)}`;
 }
 
-export function openEmployeeModal(activeTaskDetailsElement, allEmployees) {
+export function openEmployeeModal(activeTaskDetailsElement, allEmployees, userRole) {
     document.body.classList.add('overflow-hidden');
-    const currentResponsible = activeTaskDetailsElement.querySelector('.task-responsible-view').textContent.split(',').map(n => n.trim());
+    const currentResponsibleText = activeTaskDetailsElement.querySelector('.task-responsible-view').textContent;
+    
+    // Если пользователь - не 'user', показываем ему полный список для выбора.
+    if (userRole !== 'user') {
+        const currentResponsible = currentResponsibleText.split(',').map(n => n.trim());
+        // --- ИЗМЕНЕНИЕ: Убираем .filter(e => e.role === 'user') ---
+        const employeesCheckboxes = allEmployees.map(e => `<label class="flex items-center space-x-3 p-3 rounded-md hover:bg-gray-200"><input type="checkbox" value="${e.name}" ${currentResponsible.includes(e.name) ? 'checked' : ''} class="employee-checkbox w-4 h-4 rounded"><span>${e.name}</span></label>`).join('');
+        
+        employeeModal.innerHTML = `
+            <div class="modal-content">
+                <div class="p-4 border-b" style="border-color: var(--tg-theme-hint-color);">
+                    <h3 class="text-lg font-bold">Выберите ответственных</h3>
+                </div>
+                <div class="modal-body modal-body-employee">${employeesCheckboxes}</div>
+                <div class="p-2 border-t flex justify-end" style="border-color: var(--tg-theme-hint-color);">
+                    <button class="modal-select-btn px-4 py-2 rounded-lg">Выбрать</button>
+                </div>
+            </div>`;
+    } else {
+        // Если это обычный 'user', показываем ему текст без возможности редактирования.
+        employeeModal.innerHTML = `
+            <div class="modal-content">
+                <div class="p-4 border-b" style="border-color: var(--tg-theme-hint-color);">
+                    <h3 class="text-lg font-bold">Ответственные</h3>
+                </div>
+                <div class="modal-body">
+                    <p>${currentResponsibleText || 'Не назначены'}</p>
+                </div>
+            </div>`;
+    }
 
-    const userEmployees = allEmployees.map(e => e.name);
-
-    employeeModal.innerHTML = `<div class="modal-content"><div class="p-4 border-b" style="border-color: var(--tg-theme-hint-color);"><h3 class="text-lg font-bold">Выберите ответственных</h3></div><div class="modal-body modal-body-employee">${userEmployees.map(e => `<label class="flex items-center space-x-3 p-3 rounded-md hover:bg-gray-200"><input type="checkbox" value="${e}" ${currentResponsible.includes(e) ? 'checked' : ''} class="employee-checkbox w-4 h-4 rounded"><span>${e}</span></label>`).join('')}</div><div class="p-2 border-t flex justify-end" style="border-color: var(--tg-theme-hint-color);"><button class="modal-select-btn px-4 py-2 rounded-lg">Выбрать</button></div></div>`;
     employeeModal.classList.add('active');
     employeeModal.dataset.targetElement = `#${activeTaskDetailsElement.id || (activeTaskDetailsElement.id = `task-${Date.now()}`)}`;
 }
@@ -51,8 +77,8 @@ export function openAddTaskModal(allProjects, allEmployees, userRole, userName) 
     const projectsOptions = allProjects.map(p => `<option value="${p}">${p}</option>`).join('');
     
     let responsibleHtml = '';
-    if (userRole !== 'user') {
-
+    if (userRole !== 'user') {  
+        // const userEmployees = allEmployees.filter(e => e.role === 'user');
         const employeesCheckboxes = allEmployees.map(e => `<label class="flex items-center space-x-3 p-3 rounded-md hover:bg-gray-200"><input type="checkbox" value="${e.name}" class="employee-checkbox w-4 h-4 rounded"><span>${e.name}</span></label>`).join('');
         responsibleHtml = `
             <div>
@@ -61,7 +87,6 @@ export function openAddTaskModal(allProjects, allEmployees, userRole, userName) 
             </div>`;
     }
     
-    // --- ИЗМЕНЕНИЯ: textarea и удаление кнопки "Создать" ---
     addTaskModal.innerHTML = `
         <div class="modal-content">
             <div class="p-4 border-b">
@@ -121,10 +146,20 @@ export function setupModals(onStatusChange, getEmployeesCallback) {
     const modals = [statusModal, employeeModal, projectModal, addTaskModal];
     modals.forEach(modal => {
         modal.addEventListener('click', (e) => {
+            // --- ИСПРАВЛЕНИЕ ЗДЕСЬ ---
+            // Если кликнули на фон (backdrop)
             if (e.target === modal) {
-                modal.classList.remove('active');
-                document.body.classList.remove('overflow-hidden');
+                // Если это модальное окно создания задачи, вызываем полную функцию закрытия
+                if (modal.id === 'add-task-modal') {
+                    closeAddTaskModal();
+                } else {
+                    // Для всех остальных окон оставляем простое закрытие
+                    modal.classList.remove('active');
+                    document.body.classList.remove('overflow-hidden');
+                }
             }
+            // -------------------------
+
             if (modal.id === 'status-modal' && e.target.closest('.status-option')) {
                 const selectedOption = e.target.closest('.status-option');
                 const targetElement = document.querySelector(modal.dataset.targetElement);

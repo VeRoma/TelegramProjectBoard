@@ -58,6 +58,8 @@ export async function handleSaveActiveTask() {
 export function handleShowAddTaskModal() {
     const appData = store.getAppData();
     modals.openAddTaskModal(store.getAllProjects(), store.getAllEmployees(), appData.userRole, appData.userName);
+    // Меняем FAB-кнопку на "Сохранить" и назначаем ей новый обработчик
+    uiUtils.updateFabButtonUI(true, handleSaveNewTaskClick);
 }
 
 export async function handleCreateTask(taskData) {
@@ -192,4 +194,45 @@ export function handleDragDrop(projectName, updatedTaskIdsInGroup) {
 // Ваша отладочная функция
 function print (message) {
     window.Telegram.WebApp.showAlert(JSON.stringify(message, null, 2), 'OK'); 
+}
+
+/**
+ * Вызывается при нажатии на FAB-кнопку "Сохранить"
+ * для новой, еще не созданной задачи.
+ */
+export function handleSaveNewTaskClick() {
+    const tg = window.Telegram.WebApp;
+    const appData = store.getAppData();
+    
+    const taskName = document.getElementById('new-task-name')?.value;
+    const projectName = document.getElementById('new-task-project')?.value;
+    const message = document.getElementById('new-task-message')?.value;
+    const activeStatusElement = document.querySelector('#new-task-status-toggle .toggle-option.active');
+    const status = activeStatusElement ? activeStatusElement.dataset.status : 'К выполнению';
+
+    let responsibleNames = [];
+    if (appData.userRole === 'user') {
+        responsibleNames = [appData.userName];
+    } else {
+        const responsibleCheckboxes = document.querySelectorAll('#add-task-modal .employee-checkbox:checked');
+        responsibleNames = [...responsibleCheckboxes].map(cb => cb.value);
+    }
+
+    if (!taskName || !projectName || (appData.userRole !== 'user' && responsibleNames.length === 0)) {
+        return tg.showAlert('Пожалуйста, заполните поля: Наименование, Проект и Ответственный.');
+    }
+
+    const allEmployees = store.getAllEmployees();
+    const responsibleUsers = allEmployees.filter(emp => responsibleNames.includes(emp.name));
+    const responsibleUserIds = responsibleUsers.map(emp => emp.userId);
+
+    handleCreateTask({
+        name: taskName,
+        project: projectName,
+        status: status,
+        responsible: responsibleNames.join(', '),
+        message: message,
+        creatorId: window.currentUserId,
+        responsibleUserIds: responsibleUserIds
+    });
 }
