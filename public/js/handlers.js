@@ -16,7 +16,8 @@ export async function handleSaveActiveTask() {
     
     const { task: taskInAppData } = store.findTask(activeEditElement.querySelector('.task-row-index').value);
     if (!taskInAppData) {
-        return tg.showAlert('Не удалось найти исходную задачу для сохранения.');
+        tg.showAlert('Не удалось найти исходную задачу для сохранения.');
+        return;
     }
 
     const updatedTask = {
@@ -41,8 +42,9 @@ export async function handleSaveActiveTask() {
 
             uiUtils.exitEditMode(activeEditElement);
             uiUtils.updateFabButtonUI(false, handleSaveActiveTask, handleShowAddTaskModal);
+            render.renderProjects(appData.projects, appData.userName, appData.userRole);
         } else {
-            if (result.error?.includes("изменены другим пользователем")) {
+            if (result.error && result.error.includes("изменены другим пользователем")) {
                 tg.showAlert(result.error + '\nТекущие данные будут обновлены.', () => window.location.reload());
             } else {
                 tg.showAlert('Ошибка сохранения: ' + (result.error || 'Неизвестная ошибка'));
@@ -53,52 +55,10 @@ export async function handleSaveActiveTask() {
     }
 }
 
-// --- ИЗМЕНЕНИЕ: Эта функция теперь будет менять FAB-кнопку ---
 export function handleShowAddTaskModal() {
     const appData = store.getAppData();
     modals.openAddTaskModal(store.getAllProjects(), store.getAllEmployees(), appData.userRole, appData.userName);
-    // Переключаем FAB в режим "Сохранить" и назначаем новый обработчик
-    uiUtils.updateFabButtonUI(true, handleSaveNewTaskClick);
 }
-
-// --- НОВАЯ ФУНКЦИЯ: Обработчик для FAB-кнопки в режиме создания ---
-export function handleSaveNewTaskClick() {
-    const tg = window.Telegram.WebApp;
-    const appData = store.getAppData();
-    
-    const taskName = document.getElementById('new-task-name')?.value;
-    const projectName = document.getElementById('new-task-project')?.value;
-    const message = document.getElementById('new-task-message')?.value;
-    const activeStatusElement = document.querySelector('#new-task-status-toggle .toggle-option.active');
-    const status = activeStatusElement ? activeStatusElement.dataset.status : 'К выполнению';
-
-    let responsibleNames = [];
-    if (appData.userRole === 'user') {
-        responsibleNames = [appData.userName];
-    } else {
-        const responsibleCheckboxes = document.querySelectorAll('#add-task-modal .employee-checkbox:checked');
-        responsibleNames = [...responsibleCheckboxes].map(cb => cb.value);
-    }
-
-    if (!taskName || !projectName || (appData.userRole !== 'user' && responsibleNames.length === 0)) {
-        return tg.showAlert('Пожалуйста, заполните поля: Наименование, Проект и Ответственный.');
-    }
-
-    const allEmployees = store.getAllEmployees();
-    const responsibleUsers = allEmployees.filter(emp => responsibleNames.includes(emp.name));
-    const responsibleUserIds = responsibleUsers.map(emp => emp.userId);
-
-    handleCreateTask({
-        name: taskName,
-        project: projectName,
-        status: status,
-        responsible: responsibleNames.join(', '),
-        message: message,
-        creatorId: window.currentUserId,
-        responsibleUserIds: responsibleUserIds
-    });
-}
-
 
 export async function handleCreateTask(taskData) {
     const tg = window.Telegram.WebApp;
@@ -120,9 +80,7 @@ export async function handleCreateTask(taskData) {
         appData.projects.push(targetProject);
     }
     targetProject.tasks.push(optimisticTask);
-    
-    modals.closeAddTaskModal(); // Эта функция теперь также сбросит FAB-кнопку
-    
+    modals.closeAddTaskModal();
     render.renderProjects(appData.projects, appData.userName, appData.userRole);
     uiUtils.showToast('Задача добавлена, идет сохранение...');
     tg.HapticFeedback.notificationOccurred('success');
@@ -143,8 +101,6 @@ export async function handleCreateTask(taskData) {
     }
 }
 
-
-
 export async function handleStatusUpdate(rowIndex, newStatus) {
     const tg = window.Telegram.WebApp;
     const appData = store.getAppData();
@@ -153,14 +109,13 @@ export async function handleStatusUpdate(rowIndex, newStatus) {
     
     const oldStatus = task.status;
     const oldPriority = task.priority;
-    task.status = newStatus;
     
-    // --- ИСПРАВЛЕННАЯ ЛОГИКА ---
-    // Собираем все задачи для пересчета в зависимости от роли
     const allTasksForScope = (appData.userRole === 'user') 
         ? appData.projects.flatMap(p => p.tasks)
         : project.tasks;
-
+    
+    task.status = newStatus;
+    
     if (newStatus === 'Выполнено') {
         task.priority = 999;
     } else {
@@ -181,7 +136,6 @@ export async function handleStatusUpdate(rowIndex, newStatus) {
         priority: t.priority,
         status: t.status
     }));
-
     try {
         const result = await api.updatePriorities({tasks: tasksToUpdate, modifierName: appData.userName});
         if (result.status !== 'success') throw new Error(result.error || 'Ошибка сохранения');
@@ -194,14 +148,21 @@ export async function handleStatusUpdate(rowIndex, newStatus) {
     }
 }
 
-// --- ФИНАЛЬНАЯ ВЕРСИЯ DRAG-N-DROP ---
 export function handleDragDrop(projectName, updatedTaskIdsInGroup) {
     const appData = store.getAppData();
     
-    // --- ИСПРАВЛЕННАЯ ЛОГИКА ---
-    // Вне зависимости от роли, мы всегда работаем с полным списком задач
-    const allTasks = appData.projects.flatMap(p => p.tasks);
-    const taskMap = new Map(allTasks.map(t => [t.rowIndex.toString(), t]));
+    // --- ИСПРАВЛЕНИЕ: Работаем со всеми задачами для user'а ---
+    const allTasksForScope = (appData.userRole === 'user')
+        ? appData.projects.flatMap(p => p.tasks)
+        : (appData.projects.find(p => p.name === projectName) || {}).tasks;
+
+    if (!allTasksForScope) {
+        console.error('Не найдены задачи для обработки drag-drop');
+        return;
+    }
+    
+    const taskMap = new Map(allTasksForScope.map(t => [t.rowIndex.toString(), t]));
+    // ----------------------------------------------------
 
     const tasksToUpdate = updatedTaskIdsInGroup.map((id, index) => {
         const task = taskMap.get(id);
@@ -210,7 +171,6 @@ export function handleDragDrop(projectName, updatedTaskIdsInGroup) {
             return { rowIndex: task.rowIndex, priority: task.priority };
         }
     }).filter(Boolean);
-    // print(tasksToUpdate);
 
     render.renderProjects(appData.projects, appData.userName, appData.userRole);
     uiUtils.showToast('Идет сохранение нового порядка задач...');

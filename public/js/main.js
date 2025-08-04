@@ -194,7 +194,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const appData = store.getAppData();
             // -------------------------
 
-            modals.setupModals(handlers.handleStatusUpdate, store.getAllEmployees);
+             modals.setupModals(handlers.handleStatusUpdate, store.getAllEmployees);
             
             uiUtils.updateFabButtonUI(false, handlers.handleShowAddTaskModal, handlers.handleShowAddTaskModal);
         }

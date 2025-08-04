@@ -33,60 +33,61 @@ export function renderProjects(projects, userName, userRole) {
     }
 
     const isUserView = userRole === 'user';
+    
+    if (isUserView) {
+        // --- ИСПРАВЛЕНИЕ: Собираем все задачи в один массив ДО сортировки ---
+        let allUserTasks = projects.flatMap(p => p.tasks)
+            .filter(task => task.status !== 'Выполнено');
 
-    projects.forEach(project => {
-        let tasks = project.tasks;
-        if (isUserView) {
-            tasks = tasks.filter(task => task.status !== 'Выполнено');
+        if (allUserTasks.length === 0) {
+            mainContainer.innerHTML = `<div class="p-4 rounded-lg text-center" style="background-color: var(--tg-theme-secondary-bg-color);">Активных задач не найдено.</div>`;
+            return;
         }
-        
-        tasks.sort((a, b) => {
+
+        allUserTasks.sort((a, b) => {
             const orderA = (STATUSES.find(s => s.name === a.status) || { order: 99 }).order;
             const orderB = (STATUSES.find(s => s.name === b.status) || { order: 99 }).order;
             if (orderA !== orderB) return orderA - orderB;
-            
-            const priorityA = parseInt(a.priority, 10) || 999;
-            const priorityB = parseInt(b.priority, 10) || 999;
-            return priorityA - priorityB;
+            return (a.priority || 999) - (b.priority || 999);
         });
-        project.tasksToRender = tasks;
-    });
-    
-    if (isUserView) {
-        let allUserTasks = projects.flatMap(p => p.tasksToRender);
+
+        const tasksByStatus = allUserTasks.reduce((acc, task) => {
+            if (!acc[task.status]) acc[task.status] = [];
+            acc[task.status].push(task);
+            return acc;
+        }, {});
         
-        if (allUserTasks.length === 0) {
-            projectsContainer.innerHTML = `<div class="p-4 rounded-lg text-center" style="background-color: var(--tg-theme-secondary-bg-color);">Активных задач не найдено.</div>`;
-        } else {
-            const tasksByStatus = allUserTasks.reduce((acc, task) => {
-                if (!acc[task.status]) acc[task.status] = [];
-                acc[task.status].push(task);
-                return acc;
-            }, {});
-            const sortedStatusKeys = Object.keys(tasksByStatus).sort((a,b) => (STATUSES.find(s => s.name === a) || {}).order - (STATUSES.find(s => s.name === b) || {}).order);
-            
-            let userHtml = '';
-            sortedStatusKeys.forEach(status => {
-                const tasksInGroup = tasksByStatus[status];
-                const statusIcon = (STATUSES.find(s => s.name === status) || {}).icon || '';
-                userHtml += `
-                    <div class="status-group p-2">
-                        <h3 class="status-group-header text-sm font-bold p-2" style="color: var(--tg-theme-hint-color);">${statusIcon} ${status}</h3>
-                        <div class="tasks-list space-y-2" data-status-group="${status}">
-                            ${tasksInGroup.map(task => renderTaskCard(task, true)).join('')}
-                        </div>
+        const sortedStatusKeys = Object.keys(tasksByStatus).sort((a,b) => (STATUSES.find(s => s.name === a) || {}).order - (STATUSES.find(s => s.name === b) || {}).order);
+        
+        let userHtml = '';
+        sortedStatusKeys.forEach(status => {
+            const tasksInGroup = tasksByStatus[status];
+            const statusIcon = (STATUSES.find(s => s.name === status) || {}).icon || '';
+            userHtml += `
+                <div class="status-group p-2">
+                    <h3 class="status-group-header text-sm font-bold p-2" style="color: var(--tg-theme-hint-color);">${statusIcon} ${status}</h3>
+                    <div class="tasks-list space-y-2" data-status-group="${status}">
+                        ${tasksInGroup.map(task => renderTaskCard(task, true)).join('')}
                     </div>
-                `;
-            });
-            projectsContainer.innerHTML = userHtml;
-        }
+                </div>
+            `;
+        });
+        projectsContainer.innerHTML = userHtml;
     } else { // Вид для admin/owner
         projects.forEach(project => {
-            if (project.tasksToRender.length === 0) return;
+            project.tasks.sort((a, b) => {
+                const orderA = (STATUSES.find(s => s.name === a.status) || { order: 99 }).order;
+                const orderB = (STATUSES.find(s => s.name === b.status) || { order: 99 }).order;
+                if (orderA !== orderB) return orderA - orderB;
+                return (a.priority || 999) - (b.priority || 999);
+            });
+
+            if (project.tasks.length === 0) return;
+
             const projectCard = document.createElement('div');
             projectCard.className = 'card rounded-xl shadow-md overflow-hidden';
             
-            const tasksByStatus = project.tasksToRender.reduce((acc, task) => {
+            const tasksByStatus = project.tasks.reduce((acc, task) => {
                 if (!acc[task.status]) acc[task.status] = [];
                 acc[task.status].push(task);
                 return acc;
@@ -107,17 +108,15 @@ export function renderProjects(projects, userName, userRole) {
                 `;
             });
             
-            const tasksInWorkCount = project.tasksToRender.filter(t => t.status === 'В работе').length;
+            const tasksInWorkCount = project.tasks.filter(t => t.status === 'В работе').length;
             const projectTasksInfo = `${tasksInWorkCount} задач в работе`;
 
-            // --- ИЗМЕНЕНИЕ ЗДЕСЬ: Добавляем класс 'collapsible-content' ---
             projectCard.innerHTML = `
                 <div class="project-header p-4 cursor-pointer">
                     <h2 class="font-bold text-lg pointer-events-none">${project.name}</h2>
                     <p class="text-sm mt-1 pointer-events-none" style="color: var(--tg-theme-hint-color);">${projectTasksInfo}</p>
                 </div>
-                <div class="project-content collapsible-content">${projectHtml}</div>`;
-            // ---------------------------------------------------------
+                <div class="project-content">${projectHtml}</div>`;
             projectsContainer.appendChild(projectCard);
         });
     }
