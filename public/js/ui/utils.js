@@ -70,7 +70,13 @@ export function showAccessDeniedScreen() {
 
 export function showRegistrationModal() {
     document.body.classList.add('overflow-hidden');
-    if (app) app.classList.add('hidden');
+    document.getElementById('app').classList.add('hidden');
+    
+    // --- ИСПРАВЛЕНИЕ ЗДЕСЬ ---
+    // Делаем видимым родительский контейнер
+    document.getElementById('auth-blocker').classList.remove('hidden');
+    // -------------------------
+
     document.getElementById('registration-modal').classList.add('active');
 }
 
