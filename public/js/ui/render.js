@@ -35,7 +35,6 @@ export function renderProjects(projects, userName, userRole) {
     const isUserView = userRole === 'user';
     
     if (isUserView) {
-        // --- ИСПРАВЛЕНИЕ: Собираем все задачи в один массив ДО сортировки ---
         let allUserTasks = projects.flatMap(p => p.tasks)
             .filter(task => task.status !== 'Выполнено');
 
@@ -73,6 +72,7 @@ export function renderProjects(projects, userName, userRole) {
             `;
         });
         projectsContainer.innerHTML = userHtml;
+
     } else { // Вид для admin/owner
         projects.forEach(project => {
             project.tasks.sort((a, b) => {
@@ -111,12 +111,14 @@ export function renderProjects(projects, userName, userRole) {
             const tasksInWorkCount = project.tasks.filter(t => t.status === 'В работе').length;
             const projectTasksInfo = `${tasksInWorkCount} задач в работе`;
 
+            // --- ИСПРАВЛЕНИЕ ЗДЕСЬ: Добавляем класс 'collapsible-content' ---
             projectCard.innerHTML = `
                 <div class="project-header p-4 cursor-pointer">
                     <h2 class="font-bold text-lg pointer-events-none">${project.name}</h2>
                     <p class="text-sm mt-1 pointer-events-none" style="color: var(--tg-theme-hint-color);">${projectTasksInfo}</p>
                 </div>
-                <div class="project-content">${projectHtml}</div>`;
+                <div class="project-content collapsible-content">${projectHtml}</div>`;
+            // ---------------------------------------------------------
             projectsContainer.appendChild(projectCard);
         });
     }
