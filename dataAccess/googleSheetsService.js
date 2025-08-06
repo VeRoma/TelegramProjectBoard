@@ -116,11 +116,23 @@ const addTaskToSheet = async (newTaskData, creatorName) => {
     return newRow;
 };
 
+// dataAccess/googleSheetsService.js
+
 const updateTaskPrioritiesInSheet = async (updatedTasks, modifierName) => {
     const tasksSheet = await getSheet(SHEET_NAMES.TASKS);
     
     const rows = await tasksSheet.getRows();
-    const rowMap = new Map(rows.map(row => [row.get(TASK_COLUMNS.ROW_INDEX).toString(), row]));
+    
+    // --- ИСПРАВЛЕНИЕ ЗДЕСЬ ---
+    // Создаем карту, безопасно пропуская строки, где rowIndex пустой
+    const rowMap = new Map();
+    for (const row of rows) {
+        const rowIndex = row.get(TASK_COLUMNS.ROW_INDEX);
+        if (rowIndex) { // Добавляем в карту, только если rowIndex существует
+            rowMap.set(rowIndex.toString(), row);
+        }
+    }
+    // -------------------------
 
     const now = new Date().toLocaleString('ru-RU');
     const promisesToSave = [];
