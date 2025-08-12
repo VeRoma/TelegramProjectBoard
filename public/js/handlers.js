@@ -150,21 +150,22 @@ export async function handleStatusUpdate(rowIndex, newStatus) {
     }
 }
 
-export function handleDragDrop(projectName, updatedTaskIdsInGroup) {
+export function handleDragDrop(groupName, updatedTaskIdsInGroup, userRole) {
     const appData = store.getAppData();
-    
-    // --- ИСПРАВЛЕНИЕ: Работаем со всеми задачами для user'а ---
-    const allTasksForScope = (appData.userRole === 'user')
-        ? appData.projects.flatMap(p => p.tasks)
-        : (appData.projects.find(p => p.name === projectName) || {}).tasks;
+    let tasksForScope;
 
-    if (!allTasksForScope) {
-        console.error('Не найдены задачи для обработки drag-drop');
-        return;
+    if (userRole === 'user' || userRole === 'gap') {
+        tasksForScope = appData.projects.flatMap(p => p.tasks);
+    } else {
+        const projectData = appData.projects.find(p => p.name === groupName);
+        if (!projectData) {
+            console.error(`[handleDragDrop] Проект "${groupName}" не найден!`);
+            return;
+        }
+        tasksForScope = projectData.tasks;
     }
-    
-    const taskMap = new Map(allTasksForScope.map(t => [t.rowIndex.toString(), t]));
-    // ----------------------------------------------------
+
+    const taskMap = new Map(tasksForScope.map(t => [t.rowIndex.toString(), t]));
 
     const tasksToUpdate = updatedTaskIdsInGroup.map((id, index) => {
         const task = taskMap.get(id);
@@ -174,7 +175,9 @@ export function handleDragDrop(projectName, updatedTaskIdsInGroup) {
         }
     }).filter(Boolean);
 
-    render.renderProjects(appData.projects, appData.userName, appData.userRole);
+    // --- ИЗМЕНЕНИЕ: УДАЛЯЕМ ЛИШНЮЮ ПЕРЕРИСОВКУ ---
+    // render.renderProjects(appData.projects, appData.userName, appData.userRole);
+    
     uiUtils.showToast('Идет сохранение нового порядка задач...');
     
     api.updatePriorities({tasks: tasksToUpdate, modifierName: appData.userName})

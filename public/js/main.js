@@ -129,30 +129,41 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    mainContainer.addEventListener('drop', (e) => { // Обработчик события drop
+    mainContainer.addEventListener('drop', (e) => {
         e.preventDefault();
         if (!draggedElement) return;
         
-        const dropContainer = e.target.closest(`.tasks-list[data-status-group="${draggedElement.dataset.statusGroup}"]`);   // Ищем контейнер для сброса
+        const dropContainer = e.target.closest(`.tasks-list[data-status-group="${draggedElement.dataset.statusGroup}"]`);
         if (!dropContainer) {
              mainContainer.dispatchEvent(new Event('dragend'));
              return;
         };
-        const afterElement = getDragAfterElement(dropContainer, e.clientY); // Получаем элемент после которого нужно вставить перетаскиваемый элемент
+
+        const afterElement = getDragAfterElement(dropContainer, e.clientY);
         if (afterElement) {
-            dropContainer.insertBefore(draggedElement, afterElement);   // Вставляем перетаскиваемый элемент перед найденным элементом
+            dropContainer.insertBefore(draggedElement, afterElement);
         } else {
-            dropContainer.appendChild(draggedElement);  // Если нет элемента после которого нужно вставить, добавляем в конец
+            dropContainer.appendChild(draggedElement);
         }
         
-        const taskDataString = draggedElement.querySelector('.task-details').dataset.task;
-        const taskData = JSON.parse(taskDataString.replace(/&apos;/g, "'"));
-        const projectName = taskData.project;
+        const appData = store.getAppData();
+        let groupName;
+
+        // Определяем "имя группы" в зависимости от роли
+        if (appData.userRole === 'user' || appData.userRole === 'gap') {
+            // Для user и gap группа - это их сводный список задач
+            groupName = appData.userName;
+        } else {
+            // Для admin/owner группа - это проект, в котором находится задача
+            const projectElement = draggedElement.closest('.card')?.querySelector('.project-header h2');
+            groupName = projectElement ? projectElement.textContent : 'Unknown Project';
+        }
 
         const tasksInGroup = Array.from(dropContainer.querySelectorAll('[draggable="true"]'));
         const updatedTaskIds = tasksInGroup.map(card => card.dataset.taskId);
         
-        handlers.handleDragDrop(projectName, updatedTaskIds);
+        // Передаем имя группы и роль в обработчик
+        handlers.handleDragDrop(groupName, updatedTaskIds, appData.userRole);
     });
 
     mainContainer.addEventListener('dragend', () => {
