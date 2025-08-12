@@ -12,7 +12,8 @@ module.exports = {
     EMPLOYEE_ROLES: {
         OWNER: 'owner',       // Роль владельца
         USER: 'user',         // Роль обычного пользователя
-        ADMIN: 'admin'        // Роль администратора
+        ADMIN: 'admin',       // Роль администратора
+        GAP: 'gap'            // Роль для GAP
     },
     // Названия колонок в листах Google Таблицы
     TASK_COLUMNS: {

@@ -73,8 +73,8 @@ export function renderProjects(projects, userName, userRole) {
         });
         projectsContainer.innerHTML = userHtml;
 
-    } else { // Вид для admin/owner
-        projects.forEach(project => {
+    } else { // Вид для admin/owner/gap
+        projects.forEach(project => { // "project" здесь может быть и проектом, и сотрудником
             project.tasks.sort((a, b) => {
                 const orderA = (STATUSES.find(s => s.name === a.status) || { order: 99 }).order;
                 const orderB = (STATUSES.find(s => s.name === b.status) || { order: 99 }).order;
@@ -82,7 +82,7 @@ export function renderProjects(projects, userName, userRole) {
                 return (a.priority || 999) - (b.priority || 999);
             });
 
-            if (project.tasks.length === 0) return;
+            if (project.tasks.length === 0 && userRole !== 'gap') return;
 
             const projectCard = document.createElement('div');
             projectCard.className = 'card rounded-xl shadow-md overflow-hidden';
@@ -108,20 +108,21 @@ export function renderProjects(projects, userName, userRole) {
                 `;
             });
             
+            // Определяем, что показывать в заголовке
+            const title = project.name;
             const tasksInWorkCount = project.tasks.filter(t => t.status === 'В работе').length;
-            const projectTasksInfo = `${tasksInWorkCount} задач в работе`;
+            const subtitle = `${tasksInWorkCount} задач в работе`;
 
-            // --- ИСПРАВЛЕНИЕ ЗДЕСЬ: Добавляем класс 'collapsible-content' ---
             projectCard.innerHTML = `
                 <div class="project-header p-4 cursor-pointer">
-                    <h2 class="font-bold text-lg pointer-events-none">${project.name}</h2>
-                    <p class="text-sm mt-1 pointer-events-none" style="color: var(--tg-theme-hint-color);">${projectTasksInfo}</p>
+                    <h2 class="font-bold text-lg pointer-events-none">${title}</h2>
+                    <p class="text-sm mt-1 pointer-events-none" style="color: var(--tg-theme-hint-color);">${subtitle}</p>
                 </div>
                 <div class="project-content collapsible-content">${projectHtml}</div>`;
-            // ---------------------------------------------------------
             projectsContainer.appendChild(projectCard);
         });
     }
+    
     mainContainer.innerHTML = '';
     mainContainer.appendChild(projectsContainer);
 }

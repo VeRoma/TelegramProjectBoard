@@ -6,6 +6,8 @@ const { SHEET_NAMES, TASK_COLUMNS, EMPLOYEE_ROLES, ERROR_MESSAGES } = require('.
 
 router.use(googleSheetsService.loadSheetDataMiddleware);
 
+// routes/taskRoutes.js
+
 router.post('/appdata', async (req, res) => {
     try {
         const { user } = req.body;
@@ -19,48 +21,88 @@ router.post('/appdata', async (req, res) => {
 
         const userName = currentUserRecord.get(TASK_COLUMNS.EMPLOYEE_NAME);
         const userRole = currentUserRecord.get(TASK_COLUMNS.EMPLOYEE_ROLE);
-        let projects = {};
+        
+        const allTasks = await googleSheetsService.getTasks();
+        const allEmployees = await googleSheetsService.getAllEmployees();
+        const userEmployeeNames = allEmployees.filter(e => e.role === 'user').map(e => e.name);
+
         let tasksToProcess = [];
 
+        // --- НОВАЯ ЛОГИКА ДЛЯ РОЛЕЙ ---
         if (userRole === EMPLOYEE_ROLES.USER) {
-            const userSheet = await googleSheetsService.getSheet(userName).catch(() => null);
-            if (userSheet) tasksToProcess = await userSheet.getRows();
-        } else {
-            tasksToProcess = await googleSheetsService.getTasks();
+            // User видит только свои задачи
+            tasksToProcess = allTasks.filter(row => (row.get(TASK_COLUMNS.RESPONSIBLE) || '').split(',').map(n => n.trim()).includes(userName));
+        
+        } else if (userRole === EMPLOYEE_ROLES.GAP) {
+            // GAP видит свои задачи + задачи всех user'ов
+            tasksToProcess = allTasks.filter(row => {
+                const responsibles = (row.get(TASK_COLUMNS.RESPONSIBLE) || '').split(',').map(n => n.trim());
+                // Возвращаем true, если ответственный - сам GAP или кто-то из user'ов
+                return responsibles.some(r => r === userName || userEmployeeNames.includes(r));
+            });
+        } else { // admin / owner
+            // Admin/Owner видят все задачи
+            tasksToProcess = allTasks;
         }
 
         const validTasksRows = tasksToProcess.filter(row => row.get(TASK_COLUMNS.NAME));
-        
-        validTasksRows.forEach((row) => {
-            const projectName = row.get(TASK_COLUMNS.PROJECT) || 'Без проекта';
-            if (!projects[projectName]) {
-                projects[projectName] = { name: projectName, tasks: [] };
-            }
-            projects[projectName].tasks.push({
-                name: row.get(TASK_COLUMNS.NAME),
-                status: row.get(TASK_COLUMNS.STATUS),
-                responsible: row.get(TASK_COLUMNS.RESPONSIBLE),
-                message: row.get(TASK_COLUMNS.MESSAGE),
-                version: parseInt(row.get(TASK_COLUMNS.VERSION) || 0, 10),
-                rowIndex: parseInt(row.get(TASK_COLUMNS.ROW_INDEX) || row.rowNumber, 10),
-                project: projectName,
-                // --- ИСПРАВЛЕНИЕ: Используем ключ 'priority' ---
-                priority: parseInt(row.get(TASK_COLUMNS.PRIORITY), 10) || 999,
-                modifiedBy: row.get(TASK_COLUMNS.MODIFIED_BY),
-                modifiedAt: row.get(TASK_COLUMNS.MODIFIED_AT)
+        const projects = {};
+
+        // --- НОВАЯ ЛОГИКА ГРУППИРОВКИ ---
+        if (userRole === EMPLOYEE_ROLES.GAP) {
+            // Для GAP группируем по Ответственным
+            validTasksRows.forEach(row => {
+                const responsibles = (row.get(TASK_COLUMNS.RESPONSIBLE) || 'Не назначен').split(',').map(n => n.trim());
+                responsibles.forEach(responsibleName => {
+                    if (!projects[responsibleName]) {
+                        projects[responsibleName] = { name: responsibleName, tasks: [] };
+                    }
+                    projects[responsibleName].tasks.push(createTaskObject(row));
+                });
             });
+        } else {
+            // Для остальных группируем по Проектам
+            validTasksRows.forEach(row => {
+                const projectName = row.get(TASK_COLUMNS.PROJECT) || 'Без проекта';
+                if (!projects[projectName]) {
+                    projects[projectName] = { name: projectName, tasks: [] };
+                }
+                projects[projectName].tasks.push(createTaskObject(row));
+            });
+        }
+        
+        const allProjectsList = [...new Set(allTasks.map(r => r.get(TASK_COLUMNS.PROJECT)).filter(Boolean))];
+        
+        res.status(200).json({ 
+            projects: Object.values(projects), 
+            allProjects: allProjectsList, 
+            userName, 
+            userRole, 
+            allEmployees 
         });
 
-        const allProjectsFromData = await googleSheetsService.getTasks();
-        const allProjects = [...new Set(allProjectsFromData.map(r => r.get(TASK_COLUMNS.PROJECT)).filter(Boolean))];
-        const allEmployees = await googleSheetsService.getAllEmployees();
-        
-        res.status(200).json({ projects: Object.values(projects), allProjects, userName, userRole, allEmployees });
     } catch (error) {
         console.error('Error in /api/appdata:', error);
         res.status(500).json({ error: error.message });
     }
 });
+
+// Вспомогательная функция, чтобы не дублировать код
+function createTaskObject(row) {
+    return {
+        name: row.get(TASK_COLUMNS.NAME),
+        status: row.get(TASK_COLUMNS.STATUS),
+        responsible: row.get(TASK_COLUMNS.RESPONSIBLE),
+        message: row.get(TASK_COLUMNS.MESSAGE),
+        version: parseInt(row.get(TASK_COLUMNS.VERSION) || 0, 10),
+        rowIndex: parseInt(row.get(TASK_COLUMNS.ROW_INDEX) || row.rowNumber, 10),
+        project: row.get(TASK_COLUMNS.PROJECT),
+        priority: parseInt(row.get(TASK_COLUMNS.PRIORITY), 10) || 999,
+        modifiedBy: row.get(TASK_COLUMNS.MODIFIED_BY),
+        modifiedAt: row.get(TASK_COLUMNS.MODIFIED_AT),
+        groupId: row.get(TASK_COLUMNS.GROUP_ID)
+    };
+}
 
 router.post('/updatetask', async (req, res) => {
     try {
