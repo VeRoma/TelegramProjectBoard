@@ -83,11 +83,14 @@ export function showRegistrationModal() {
 export function setupUserInfo(nameFromSheet) {
     const greetingElement = document.getElementById('greeting-text');
     const userIdElement = document.getElementById('user-id-text');
-    const user = window.Telegram.WebApp.initDataUnsafe.user;
-    if (user && user.id) {
-        const displayName = nameFromSheet || user.first_name || 'пользователь';
-        greetingElement.textContent = `Привет, ${displayName}!`;
-        userIdElement.textContent = `Ваш ID: ${user.id}`;
+    
+    // Используем имя, полученное с сервера (из таблицы Users)
+    const displayName = nameFromSheet || 'Пользователь';
+    greetingElement.textContent = `Привет, ${displayName}!`;
+
+    // Просто скрываем элемент, где отображался ID
+    if (userIdElement) {
+        userIdElement.style.display = 'none';
     }
 }
 

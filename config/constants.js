@@ -2,41 +2,68 @@
 
 // Объект с названиями листов Google Таблицы
 module.exports = {
+    // Названия листов в Google Таблице, соответствующие файлам AvigeyaProjectDataBase
     SHEET_NAMES: {
-        TASKS: 'Задачи',      // Название листа для задач
-        STATUSES: 'Статусы',  // Название листа для статусов задач
-        EMPLOYEES: 'Сотрудники', // Название листа для данных о сотрудниках
-        LOGS: 'Logs'          // Название листа для логов доступа
+        TASKS: 'Tasks',
+        PROJECTS: 'Projects',
+        USERS: 'Users',
+        MEMBERS: 'Members', // Участники конкретных задач
+        PROJECT_MEMBERS: 'ProjectMembers', // Участники конкретных проектов
+        STATUSES: 'Statuses',
+        LOGS: 'ActivityLog',
     },
-    // Роли сотрудников, используемые в приложении
+
+    // Новый список ролей с описанием их функционала
     EMPLOYEE_ROLES: {
-        OWNER: 'owner',       // Роль владельца
-        USER: 'user',         // Роль обычного пользователя
-        ADMIN: 'admin',       // Роль администратора
-        GAP: 'gap'            // Роль для GAP
+        OWNER: 'owner',         // Владелец. Полный доступ ко всем данным и настройкам.
+        ADMIN: 'admin',         // Администратор. Полный доступ ко всем проектам и задачам.
+        DESIGNER: 'designer',   // Проектировщик/дизайнер. Видит свои задачи и может создавать новые для участников своих проектов.
+        CONTRACTOR: 'contractor', // Подрядчик. Видит только те задачи, в которых он является исполнителем.
+        PARTNER: 'partner',       // Партнер. Видит задачи в своих проектах, может создавать новые.
+        CLIENT: 'client'          // Клиент. Имеет доступ только к просмотру задач в своих проектах.
     },
-    // Названия колонок в листах Google Таблицы
+
+    // Названия колонок для листа "Tasks"
     TASK_COLUMNS: {
-        NAME: 'Наименование',
-        STATUS: 'Статус',
-        RESPONSIBLE: 'Ответственный',
-        MESSAGE: 'Сообщение исполнителю',
-        PROJECT: 'Проект',
-        PRIORITY: 'Приоритет',
-        VERSION: 'Версия',
-        ROW_INDEX: 'rowIndex',
-        USER_ID: 'UserID',
-        EMPLOYEE_NAME: 'Имя',
-        EMPLOYEE_PHONE: 'Номер телефона',
-        EMPLOYEE_ROLE: 'Role',
-        TIMESTAMP: 'Timestamp',
-        USERNAME: 'Username',
-        FIRST_NAME: 'FirstName',
-        LAST_NAME: 'LastName',
-        // --- НОВЫЕ КОЛОНКИ ---
-        MODIFIED_BY: 'Кем изменено',
-        MODIFIED_AT: 'Когда изменено'
+        TASK_ID: 'TaskID',
+        NAME: 'Name', // В таблице Tasks это колонка "Name"
+        STAGE_ID: 'StageID',
+        PROJECT_ID: 'ProjectID',
+        USER_ID: 'UserID', // Основной ответственный (куратор)
+        STATUS_ID: 'StatusID',
+        PRIORITY: 'Priority',
+        AUTHOR_USER_ID: 'AuthorUserID',
+        VERSION: 'Version',
+        START_DATE: 'StartData',
+        FINISH_DATE: 'FinishData',
+        // Технические поля, которые мы используем
+        MODIFIED_BY: 'ModifiedBy',
+        MODIFIED_AT: 'ModifiedAt',
+        GROUP_ID: 'GroupID', // Для связи задач с несколькими исполнителями
+        ROW_INDEX: 'rowIndex' // Физический номер строки для быстрых обновлений
     },
+
+    // Названия колонок для листа "Users"
+    USER_COLUMNS: {
+        USER_ID: 'UserID',
+        NAME: 'Name',
+        ROLE: 'Role',
+        TG_USER_ID: 'TGUserID', 
+    },
+
+    // Названия колонок для листа "Projects"
+    PROJECT_COLUMNS: {
+        PROJECT_ID: 'ProjectID',
+        PROJECT_NAME: 'ProjectName'
+    },
+    
+    // Названия колонок для листа "Members" (дополнительные участники задачи)
+    MEMBER_COLUMNS: {
+        MEMBER_ID: 'MemberID',
+        TASK_ID: 'TaskID',
+        USER_ID: 'UserID'
+    },
+
     // Шаблоны сообщений для Telegram бота
     TELEGRAM_MESSAGES: {
         REGISTRATION_REQUEST: (name, userId) => `❗️ Запрос на регистрацию ❗️\n\nИмя: ${name}\nUserID:\n\`${userId}\`\n\nПожалуйста, добавьте этого пользователя в систему.`,
@@ -50,7 +77,6 @@ module.exports = {
         GOOGLE_SHEET_ACCESS_ERROR: 'Внутренняя ошибка сервера при доступе к Google Sheets',
         USER_OBJECT_REQUIRED: 'User object is required',
         UNAUTHORIZED_USER_NOT_FOUND: 'Unauthorized: User not found in employees sheet',
-        OWNER_NOT_FOUND: 'Владелец (owner) с UserID не найден в таблице.',
         TASK_NOT_FOUND: 'Задача не найдена',
         INVALID_DATA_FORMAT: 'Неверный формат данных',
         UNKNOWN_SERVER_ERROR: 'Неизвестная ошибка сервера'
