@@ -9,7 +9,10 @@ module.exports = {
         USERS: 'Users',
         MEMBERS: 'Members', // Участники конкретных задач
         PROJECT_MEMBERS: 'ProjectMembers', // Участники конкретных проектов
+        PROJECT_ROLES: 'ProjectRoles', // Роли участников в проектах
         STATUSES: 'Statuses',
+        STAGES: 'Stages',
+        COMMENTS: 'Comments',
         LOGS: 'ActivityLog',
     },
 
@@ -67,7 +70,8 @@ module.exports = {
     // Названия колонок для листа "Statuses"
     STATUS_COLUMNS: {
         STATUS_ID: 'StatusID',
-        STATUS_NAME: 'StatusName'
+        STATUS_NAME: 'Name',
+        ICON: 'Icon'
     },
 
     // Шаблоны сообщений для Telegram бота
@@ -85,6 +89,7 @@ module.exports = {
         UNAUTHORIZED_USER_NOT_FOUND: 'Unauthorized: User not found in employees sheet',
         TASK_NOT_FOUND: 'Задача не найдена',
         INVALID_DATA_FORMAT: 'Неверный формат данных',
-        UNKNOWN_SERVER_ERROR: 'Неизвестная ошибка сервера'
+        UNKNOWN_SERVER_ERROR: 'Неизвестная ошибка сервера',
+        TASK_UPDATE_CONFLICT: 'Конфликт: задача была изменена другим пользователем. Пожалуйста, обновите данные и попробуйте снова.'
     }
 };

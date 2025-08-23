@@ -29,20 +29,21 @@ const loadSheetDataMiddleware = async (req, res, next) => {
     }
 };
 
-const getSheet = async (sheetTitle) => {
-    await doc.loadInfo();
+const getSheet = (sheetTitle) => {
     const sheet = doc.sheetsByTitle[sheetTitle];
-    if (!sheet) throw new Error(`Sheet "${sheetTitle}" not found.`);
+    // Не бросаем ошибку, а возвращаем undefined, чтобы вызывающий код мог обработать отсутствие листа
     return sheet;
 };
 
 /**
  * Получает всех сотрудников из Google Таблицы и преобразует их в стандартные JS-объекты.
  * Это основная функция для получения данных о сотрудниках.
+ * Важно: эта функция должна вызываться после отработки loadSheetDataMiddleware.
  * @returns {Promise<Array<object>>} Массив объектов сотрудников.
  */
-const getAllEmployees = async () => {
-    const usersSheet = await getSheet(SHEET_NAMES.USERS);
+const getAllUsers = async () => {
+    const usersSheet = getSheet(SHEET_NAMES.USERS);
+    if (!usersSheet) throw new Error(`Mandatory sheet "${SHEET_NAMES.USERS}" not found.`);
     const rows = await usersSheet.getRows();
     // Преобразуем строки таблицы в стандартизированные объекты
     return rows.map(row => ({
@@ -59,7 +60,7 @@ const getAllEmployees = async () => {
  * @returns {Promise<object|undefined>} Объект сотрудника или undefined, если не найден.
  */
 const getEmployeeById = async (tgUserId) => {
-    const employees = await getAllEmployees();
+    const employees = await getAllUsers();
     // Сравниваем как строки, чтобы избежать проблем с типами данных (число vs строка)
     return employees.find(employee => String(employee.tgUserId) === String(tgUserId));
 };
@@ -69,12 +70,13 @@ const getEmployeeById = async (tgUserId) => {
  * @returns {Promise<object|undefined>} Объект владельца или undefined, если не найден.
  */
 const getOwnerEmployee = async () => {
-    const employees = await getAllEmployees();
+    const employees = await getAllUsers();
     return employees.find(employee => employee.role === EMPLOYEE_ROLES.OWNER);
 };
 
 const getAllProjects = async () => {
-    const projectsSheet = await getSheet(SHEET_NAMES.PROJECTS);
+    const projectsSheet = getSheet(SHEET_NAMES.PROJECTS);
+    if (!projectsSheet) throw new Error(`Mandatory sheet "${SHEET_NAMES.PROJECTS}" not found.`);
     const rows = await projectsSheet.getRows();
     return rows.map(row => ({
         projectId: row.get(PROJECT_COLUMNS.PROJECT_ID),
@@ -83,7 +85,8 @@ const getAllProjects = async () => {
 };
 
 const getAllStatuses = async () => {
-    const statusesSheet = await getSheet(SHEET_NAMES.STATUSES);
+    const statusesSheet = getSheet(SHEET_NAMES.STATUSES);
+    if (!statusesSheet) throw new Error(`Mandatory sheet "${SHEET_NAMES.STATUSES}" not found.`);
     const rows = await statusesSheet.getRows();
     return rows.map(row => ({
         statusId: row.get(STATUS_COLUMNS.STATUS_ID),
@@ -92,7 +95,8 @@ const getAllStatuses = async () => {
 };
 
 const getAllMembers = async () => {
-    const membersSheet = await getSheet(SHEET_NAMES.MEMBERS);
+    // Лист Members является опциональным, поэтому просто возвращаем пустой массив, если он отсутствует
+    const membersSheet = getSheet(SHEET_NAMES.MEMBERS);
     if (!membersSheet) return [];
     const rows = await membersSheet.getRows();
     return rows.map(row => ({
@@ -103,7 +107,8 @@ const getAllMembers = async () => {
 };
 
 const getTasks = async () => {
-    const tasksSheet = await getSheet(SHEET_NAMES.TASKS);
+    const tasksSheet = getSheet(SHEET_NAMES.TASKS);
+    if (!tasksSheet) throw new Error(`Mandatory sheet "${SHEET_NAMES.TASKS}" not found.`);
     return await tasksSheet.getRows();
 };
 
@@ -133,7 +138,7 @@ module.exports = {
     // --- ВОССТАНАВЛИВАЕМ ЭКСПОРТЫ ---
     getEmployeeById,
     getOwnerEmployee,
-    getAllEmployees,
+    getAllUsers,
     updateTaskInSheet,
     addTaskToSheet,
     updateTaskPrioritiesInSheet,
