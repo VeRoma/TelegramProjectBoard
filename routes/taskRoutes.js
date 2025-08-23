@@ -1,43 +1,34 @@
 const express = require('express');
 const router = express.Router();
 const googleSheetsService = require('../dataAccess/googleSheetsService');
-const { TASK_COLUMNS, USER_COLUMNS, PROJECT_COLUMNS, ERROR_MESSAGES } = require('../config/constants');
+const { TASK_COLUMNS, ERROR_MESSAGES } = require('../config/constants');
 
 router.use(googleSheetsService.loadSheetDataMiddleware);
 
 router.post('/appdata', async (req, res) => {
     try {
-        console.log('\n--- [НАЧАЛО ЗАПРОСА /appdata] ---');
         const { user } = req.body;
         if (!user || !user.id) {
             return res.status(400).json({ error: ERROR_MESSAGES.USER_OBJECT_REQUIRED });
         }
 
-        // --- Этап 1: Загрузка всех справочников ---
+        // 1. Загружаем все справочники один раз
         const allUsers = await googleSheetsService.getAllUsers();
         const allProjects = await googleSheetsService.getAllProjects();
         const allTasks = await googleSheetsService.getTasks();
         const allMembers = await googleSheetsService.getAllMembers();
         const allStatuses = await googleSheetsService.getAllStatuses();
 
-        console.log(`[СЕРВЕР] Шаг 1: Данные из таблиц загружены.`);
-        console.log(`  - Пользователей найдено: ${allUsers.length}`);
-        console.log(`  - Проектов найдено: ${allProjects.length}`);
-        console.log(`  - Задач найдено: ${allTasks.length}`);
-        console.log(`  - Участников (Members) найдено: ${allMembers.length}`);
-
-        // --- Этап 2: Верификация пользователя ---
         const currentUser = allUsers.find(u => u.tgUserId == user.id);
         if (!currentUser) {
-            console.log(`[СЕРВЕР] Шаг 2: Пользователь с TG ID ${user.id} НЕ НАЙДЕН. Отправка статуса 'unregistered'.`);
             return res.status(200).json({ status: 'unregistered' });
         }
-        const { name: userName, role: userRole, userId: currentInternalUserId } = currentUser;
-        console.log(`[СЕРВЕР] Шаг 2: Пользователь найден. Имя: "${userName}", Роль: "${userRole}", Внутренний ID: "${currentInternalUserId}"`);
 
+        const { name: userName, role: userRole, userId: currentInternalUserId } = currentUser;
+        
         let tasksToProcess = [];
 
-        // --- Этап 3: Фильтрация задач по роли ---
+        // 2. Определяем, какие задачи нужно показать пользователю
         if (userRole === 'admin' || userRole === 'owner') {
             tasksToProcess = allTasks;
         } else {
@@ -49,14 +40,17 @@ router.post('/appdata', async (req, res) => {
                 return allMembers.some(m => m.taskId === taskId && m.userId === currentInternalUserId);
             });
         }
-        console.log(`[СЕРВЕР] Шаг 3: После фильтрации по роли осталось задач: ${tasksToProcess.length}`);
 
         const validTasks = tasksToProcess.filter(row => row.get(TASK_COLUMNS.NAME));
         
-        // --- Этап 4: "Обогащение" данных ---
+        // 3. "Обогащаем" задачи реальными именами, подставляя значения по умолчанию
         const enrichedTasks = validTasks.map(task => {
-            const project = allProjects.find(p => p.projectId == task.get(TASK_COLUMNS.PROJECT_ID));
-            const status = allStatuses.find(s => s.statusId == task.get(TASK_COLUMNS.STATUS_ID));
+            const projectId = task.get(TASK_COLUMNS.PROJECT_ID) || '1'; // По умолчанию ID=1
+            const statusId = task.get(TASK_COLUMNS.STATUS_ID) || '1'; // По умолчанию ID=1
+            const priority = parseInt(task.get(TASK_COLUMNS.PRIORITY), 10) || 1; // По умолчанию 1
+
+            const project = allProjects.find(p => p.projectId == projectId);
+            const status = allStatuses.find(s => s.statusId == statusId);
             
             const taskId = task.get(TASK_COLUMNS.TASK_ID);
             const memberUserIds = allMembers.filter(m => m.taskId === taskId).map(m => m.userId);
@@ -68,13 +62,13 @@ router.post('/appdata', async (req, res) => {
                 status: status ? status.name : 'Неизвестный статус',
                 responsible: responsibleNames.join(', '),
                 project: project ? project.projectName : 'Без проекта',
-                priority: parseInt(task.get(TASK_COLUMNS.PRIORITY), 10) || 999,
-                rowIndex: task.rowNumber,
+                priority: priority,
+                rowIndex: task.rowNumber, 
+                // ... добавляем остальные поля по мере необходимости
             };
         });
-        console.log(`[СЕРВЕР] Шаг 4: "Обогащено" задач: ${enrichedTasks.length}. Пример первой задачи:`, enrichedTasks[0]);
 
-        // --- Этап 5: Группировка ---
+        // 4. Группируем "обогащенные" задачи по проектам
         const groups = {};
         enrichedTasks.forEach(task => {
             const groupName = task.project;
@@ -83,23 +77,17 @@ router.post('/appdata', async (req, res) => {
             }
             groups[groupName].tasks.push(task);
         });
-        console.log(`[СЕРВЕР] Шаг 5: Задачи сгруппированы в ${Object.keys(groups).length} групп(ы).`);
-
-        // --- Этап 6: Отправка ответа ---
-        const responsePayload = { 
+        
+        res.status(200).json({ 
             projects: Object.values(groups),
             allProjects: allProjects.map(p => p.projectName), 
             userName, 
             userRole,
             allEmployees: allUsers
-        };
-        console.log(`[СЕРВЕР] Шаг 6: Отправка ответа клиенту. Количество групп (проектов): ${responsePayload.projects.length}`);
-        console.log('--- [КОНЕЦ ЗАПРОСА /appdata] ---\n');
-        
-        res.status(200).json(responsePayload);
+        });
 
     } catch (error) {
-        console.error('КРИТИЧЕСКАЯ ОШИБКА в /api/appdata:', error);
+        console.error('Error in /api/appdata:', error);
         res.status(500).json({ error: error.message });
     }
 });
