@@ -54,7 +54,7 @@ module.exports = {
     // Названия колонок для листа "Projects"
     PROJECT_COLUMNS: {
         PROJECT_ID: 'ProjectID',
-        PROJECT_NAME: 'ProjectName'
+        PROJECT_NAME: 'Name'
     },
     
     // Названия колонок для листа "Members" (дополнительные участники задачи)
@@ -62,6 +62,12 @@ module.exports = {
         MEMBER_ID: 'MemberID',
         TASK_ID: 'TaskID',
         USER_ID: 'UserID'
+    },
+
+    // Названия колонок для листа "Statuses"
+    STATUS_COLUMNS: {
+        STATUS_ID: 'StatusID',
+        STATUS_NAME: 'StatusName'
     },
 
     // Шаблоны сообщений для Telegram бота

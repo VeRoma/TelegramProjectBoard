@@ -4,8 +4,8 @@ const router = express.Router(); // Создаем новый роутер Expre
 // Импортируем сервисы для работы с Google Таблицами и Telegram
 const googleSheetsService = require('../dataAccess/googleSheetsService');
 const telegramService = require('../dataAccess/telegramService');
-// Импортируем константы для сообщений об ошибках и названий колонок/ролей
-const { ERROR_MESSAGES, TASK_COLUMNS, EMPLOYEE_ROLES } = require('../config/constants');
+// Импортируем константы для сообщений об ошибках
+const { ERROR_MESSAGES } = require('../config/constants');
 
 // Применяем middleware для загрузки данных о листах Google Таблицы ко всем маршрутам в этом роутере
 router.use(googleSheetsService.loadSheetDataMiddleware);
@@ -19,13 +19,16 @@ router.post('/verifyuser', async (req, res) => {
     }
     try {
         // Ищем пользователя в листе сотрудников по его UserID
-        const userRow = await googleSheetsService.getEmployeeById(user.id);
+        const employee = await googleSheetsService.getEmployeeById(user.id);
 
-        if (userRow) {
+        if (employee) {
             // Если пользователь найден, логируем его доступ
             await googleSheetsService.logUserAccess(user);
-            // Возвращаем статус 'authorized' и данные пользователя
-            res.status(200).json({ status: 'authorized', name: userRow.get(TASK_COLUMNS.EMPLOYEE_NAME), role: userRow.get(TASK_COLUMNS.EMPLOYEE_ROLE) });
+            // Возвращаем статус 'authorized' и данные пользователя.
+            // `employee` - это обычный JS-объект, поэтому обращаемся к свойствам напрямую.
+            res.status(200).json({ 
+                status: 'authorized', name: employee.name, role: employee.role 
+            });
         }  else {
             // Если пользователь не найден, возвращаем статус 'unregistered'
             res.status(200).json({ status: 'unregistered' });
@@ -43,10 +46,10 @@ router.post('/requestregistration', async (req, res) => {
         // Ищем владельца (owner) в листе сотрудников, чтобы отправить ему запрос
         const owner = await googleSheetsService.getOwnerEmployee();
 
-        // Проверяем, найден ли владелец и есть ли у него UserID
-        if (owner && owner.get(TASK_COLUMNS.USER_ID)) {
-            const ownerId = owner.get(TASK_COLUMNS.USER_ID);
-            // Отправляем запрос владельцу через Telegram
+        // Проверяем, найден ли владелец и есть ли у него Telegram UserID
+        if (owner && owner.tgUserId) {
+            const ownerId = owner.tgUserId;
+            // Отправляем запрос владельцу через Telegram, используя его tgUserId
             await telegramService.sendRegistrationRequest(name, userId, ownerId);
             res.status(200).json({ status: 'request_sent' }); // Возвращаем успешный статус
         } else {
