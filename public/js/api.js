@@ -85,16 +85,18 @@ export function logAction(message, context = {}) {
  * @param {object} payload - Объект с массивом задач и именем изменившего.
  * @returns {Promise<object>}
  */
-export function updatePriorities(payload) {
+export async function updatePriorities(payload) {
+
+    console.log('Updating priorities with payload:', payload);
+
     // --- ИСПРАВЛЕНИЕ ЗДЕСЬ: Отправляем payload напрямую ---
-    return fetch('/api/updatepriorities', {
+    const res = await fetch('/api/updatepriorities', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
-    }).then(res => {
-        if (!res.ok) throw new Error('Ошибка обновления приоритетов');
-        return res.json();
     });
+    if (!res.ok) throw new Error('Ошибка обновления приоритетов');
+    return await res.json();
 }
 
 /**

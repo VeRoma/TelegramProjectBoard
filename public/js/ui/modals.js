@@ -1,4 +1,4 @@
-import { STATUSES } from '../data/statuses.js';
+import * as store from '../store.js';
 import * as uiUtils from './utils.js';
 import * as handlers from '../handlers.js';
 
@@ -8,12 +8,16 @@ const projectModal = document.getElementById('project-modal');
 const addTaskModal = document.getElementById('add-task-modal');
 
 export function openStatusModal(activeTaskDetailsElement) {
+    uiUtils.collapseAllTaskDetails();
     document.body.classList.add('overflow-hidden');
     
+    const statuses = store.getAllStatuses();
+    statuses.sort((a, b) => a.order - b.order);
+
     statusModal.innerHTML = `
         <div class="modal-content modal-content-compact">
             <div class="modal-body p-2">
-                ${STATUSES.map(status => `
+                ${statuses.map(status => `
                     <div class="status-option flex items-center p-3 rounded-lg hover:bg-gray-200 cursor-pointer" data-status-value="${status.name}">
                         <span class="text-2xl w-8 text-center">${status.icon}</span>
                         <span class="text-lg ml-3">${status.name}</span>
@@ -23,17 +27,17 @@ export function openStatusModal(activeTaskDetailsElement) {
         </div>`;
         
     statusModal.classList.add('active');
-    statusModal.dataset.targetElement = `#${activeTaskDetailsElement.id || (activeTaskDetailsElement.id = `task-${Date.now()}`)}`;
+    statusModal.dataset.targetElement = `#${activeTaskDetailsElement.id}`;
 }
 
 export function openEmployeeModal(activeTaskDetailsElement, allEmployees, userRole) {
     document.body.classList.add('overflow-hidden');
     const currentResponsibleText = activeTaskDetailsElement.querySelector('.task-responsible-view').textContent;
     
-    // Если пользователь - не 'user', показываем ему полный список для выбора.
-    if (userRole !== 'user') {
+    const isLimitedView = !['owner', 'admin'].includes(userRole);
+
+    if (!isLimitedView) {
         const currentResponsible = currentResponsibleText.split(',').map(n => n.trim());
-        // --- ИЗМЕНЕНИЕ: Убираем .filter(e => e.role === 'user') ---
         const employeesCheckboxes = allEmployees.map(e => `<label class="flex items-center space-x-3 p-3 rounded-md hover:bg-gray-200"><input type="checkbox" value="${e.name}" ${currentResponsible.includes(e.name) ? 'checked' : ''} class="employee-checkbox w-4 h-4 rounded"><span>${e.name}</span></label>`).join('');
         
         employeeModal.innerHTML = `
@@ -47,7 +51,6 @@ export function openEmployeeModal(activeTaskDetailsElement, allEmployees, userRo
                 </div>
             </div>`;
     } else {
-        // Если это обычный 'user', показываем ему текст без возможности редактирования.
         employeeModal.innerHTML = `
             <div class="modal-content">
                 <div class="p-4 border-b" style="border-color: var(--tg-theme-hint-color);">
@@ -60,25 +63,26 @@ export function openEmployeeModal(activeTaskDetailsElement, allEmployees, userRo
     }
 
     employeeModal.classList.add('active');
-    employeeModal.dataset.targetElement = `#${activeTaskDetailsElement.id || (activeTaskDetailsElement.id = `task-${Date.now()}`)}`;
+    employeeModal.dataset.targetElement = `#${activeTaskDetailsElement.id}`;
 }
 
 export function openProjectModal(activeTaskDetailsElement, allProjects) {
     document.body.classList.add('overflow-hidden');
     const currentProject = activeTaskDetailsElement.querySelector('.task-project-view').textContent;
-    projectModal.innerHTML = `<div class="modal-content"><div class="p-4 border-b" style="border-color: var(--tg-theme-hint-color);"><h3 class="text-lg font-bold">Выберите проект</h3></div><div class="modal-body">${allProjects.map(p => `<label class="flex items-center space-x-3 p-3 rounded-md hover:bg-gray-200"><input type="radio" name="project" value="${p}" ${p === currentProject ? 'checked' : ''} class="w-4 h-4"><span>${p}</span></label>`).join('')}</div><div class="p-2 border-t flex justify-end" style="border-color: var(--tg-theme-hint-color);"><button class="modal-select-btn px-4 py-2 rounded-lg">Выбрать</button></div></div>`;
+    // allProjects теперь массив объектов { projectId, projectName }
+    projectModal.innerHTML = `<div class="modal-content"><div class="p-4 border-b" style="border-color: var(--tg-theme-hint-color);"><h3 class="text-lg font-bold">Выберите проект</h3></div><div class="modal-body">${allProjects.map(p => `<label class="flex items-center space-x-3 p-3 rounded-md hover:bg-gray-200"><input type="radio" name="project" value="${p.projectName}" ${p.projectName === currentProject ? 'checked' : ''} class="w-4 h-4"><span>${p.projectName}</span></label>`).join('')}</div><div class="p-2 border-t flex justify-end" style="border-color: var(--tg-theme-hint-color);"><button class="modal-select-btn px-4 py-2 rounded-lg">Выбрать</button></div></div>`;
     projectModal.classList.add('active');
-    projectModal.dataset.targetElement = `#${activeTaskDetailsElement.id || (activeTaskDetailsElement.id = `task-${Date.now()}`)}`;
+    projectModal.dataset.targetElement = `#${activeTaskDetailsElement.id}`;
 }
 
 export function openAddTaskModal(allProjects, allEmployees, userRole, userName) {
     document.body.classList.add('overflow-hidden');
     const tg = window.Telegram.WebApp;
-    const projectsOptions = allProjects.map(p => `<option value="${p}">${p}</option>`).join('');
+    const projectsOptions = allProjects.map(p => `<option value="${p.projectName}">${p.projectName}</option>`).join('');
     
     let responsibleHtml = '';
-    if (userRole !== 'user') {  
-        // const userEmployees = allEmployees.filter(e => e.role === 'user');
+    const isLimitedView = !['owner', 'admin'].includes(userRole);
+    if (!isLimitedView) {  
         const employeesCheckboxes = allEmployees.map(e => `<label class="flex items-center space-x-3 p-3 rounded-md hover:bg-gray-200"><input type="checkbox" value="${e.name}" class="employee-checkbox w-4 h-4 rounded"><span>${e.name}</span></label>`).join('');
         responsibleHtml = `
             <div>
@@ -86,6 +90,18 @@ export function openAddTaskModal(allProjects, allEmployees, userRole, userName) 
                 <div class="modal-body-employee mt-1 border rounded-md p-2">${employeesCheckboxes}</div>
             </div>`;
     }
+
+    const statuses = store.getAllStatuses();
+    statuses.sort((a, b) => a.order - b.order);
+    const statusToggleHtml = statuses.map((status, index) => {
+        const isActive = index === 0 ? 'active' : ''; 
+        return `
+            <div class="toggle-option ${isActive}" data-status="${status.name}">
+                <span class="toggle-icon">${status.icon}</span>
+                <span class="toggle-text">${status.name}</span>
+            </div>
+        `;
+    }).join('');
     
     addTaskModal.innerHTML = `
         <div class="modal-content">
@@ -101,9 +117,7 @@ export function openAddTaskModal(allProjects, allEmployees, userRole, userName) 
                 <div>
                     <label class="text-xs font-medium text-gray-500">Статус</label>
                     <div id="new-task-status-toggle" class="status-toggle">
-                        <div class="toggle-option active" data-status="К выполнению"><span class="toggle-icon">📥</span><span class="toggle-text">К выполнению</span></div>
-                        <div class="toggle-option" data-status="В работе"><span class="toggle-icon">⚒️</span><span class="toggle-text">В работе</span></div>
-                        <div class="toggle-option" data-status="На контроле"><span class="toggle-icon">🔍</span><span class="toggle-text">На контроле</span></div>
+                        ${statusToggleHtml} 
                     </div>
                 </div>
                 <div>
@@ -112,7 +126,7 @@ export function openAddTaskModal(allProjects, allEmployees, userRole, userName) 
                 </div>
                 ${responsibleHtml}
             </div>
-            </div>`;
+        </div>`;
     addTaskModal.classList.add('active');
 
     const statusToggle = document.getElementById('new-task-status-toggle');
@@ -130,43 +144,37 @@ export function openAddTaskModal(allProjects, allEmployees, userRole, userName) 
     tg.BackButton.show();
 }
 
-// --- ИЗМЕНЕНИЕ: Сброс FAB-кнопки при закрытии окна ---
 export function closeAddTaskModal() {
     const tg = window.Telegram.WebApp;
     addTaskModal.classList.remove('active');
     document.body.classList.remove('overflow-hidden');
     tg.BackButton.hide();
     tg.BackButton.offClick(closeAddTaskModal);
-    // Возвращаем FAB к исходному состоянию
     uiUtils.updateFabButtonUI(false, handlers.handleSaveActiveTask, handlers.handleShowAddTaskModal);
 }
 
-// --- ИЗМЕНЕНИЕ: Убираем логику создания задачи отсюда ---
-export function setupModals(onStatusChange, getEmployeesCallback) {
+export function setupModals(onStatusChange) {
     const modals = [statusModal, employeeModal, projectModal, addTaskModal];
     modals.forEach(modal => {
         modal.addEventListener('click', (e) => {
-            // --- ИСПРАВЛЕНИЕ ЗДЕСЬ ---
-            // Если кликнули на фон (backdrop)
             if (e.target === modal) {
-                // Если это модальное окно создания задачи, вызываем полную функцию закрытия
                 if (modal.id === 'add-task-modal') {
                     closeAddTaskModal();
                 } else {
-                    // Для всех остальных окон оставляем простое закрытие
                     modal.classList.remove('active');
                     document.body.classList.remove('overflow-hidden');
                 }
             }
-            // -------------------------
 
             if (modal.id === 'status-modal' && e.target.closest('.status-option')) {
                 const selectedOption = e.target.closest('.status-option');
                 const targetElement = document.querySelector(modal.dataset.targetElement);
                 if (!targetElement) return;
-                const rowIndex = targetElement.querySelector('.task-row-index').value;
+
+                const taskId = targetElement.closest('[data-task-id]').dataset.taskId;
                 const newStatus = selectedOption.dataset.statusValue;
-                onStatusChange(rowIndex, newStatus);
+                onStatusChange(taskId, newStatus);
+                
                 modal.classList.remove('active');
                 document.body.classList.remove('overflow-hidden');
             }

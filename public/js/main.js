@@ -11,69 +11,91 @@ document.addEventListener('DOMContentLoaded', () => {
     const mainContainer = document.getElementById('main-content');
     
     mainContainer.addEventListener('click', async (event) => {
-        const statusActionArea = event.target.closest('.status-action-area');
-        if (statusActionArea) {
-            const taskCard = statusActionArea.closest('[data-task-id]');
-            const detailsContainer = taskCard.querySelector('.task-details');
-            if (!detailsContainer.innerHTML) {
-                const appData = store.getAppData();
-                render.renderTaskDetails(detailsContainer, appData.userRole);
-            }
-            modals.openStatusModal(detailsContainer);
-            return;
+    const statusActionArea = event.target.closest('.status-action-area');
+    if (statusActionArea) {
+        // --- РЕШЕНИЕ ЗДЕСЬ ---
+        // Останавливаем событие, чтобы оно не "всплыло" до taskHeader
+        event.stopPropagation();
+        // ---------------------
+        
+        const taskCard = statusActionArea.closest('[data-task-id]');
+        const detailsContainer = taskCard.querySelector('.task-details');
+        
+        // Принудительно "захлопываем" карточку перед открытием модального окна
+            detailsContainer.classList.remove('expanded');
+            detailsContainer.innerHTML = '';
+
+        // Рендерим детали, если их нет, чтобы модальное окно могло получить ID
+        if (!detailsContainer.innerHTML) {
+            const appData = store.getAppData();
+            render.renderTaskDetails(detailsContainer, appData.userRole);
         }
-        const editBtn = event.target.closest('.edit-btn');
-        if (editBtn) {
-            const detailsContainer = editBtn.closest('.task-details');
-            const currentlyEditing = document.querySelector('.task-details.edit-mode');
-            if (currentlyEditing && currentlyEditing !== detailsContainer) {
-                await handlers.handleSaveActiveTask();
-            }
-            const backButtonHandler = () => {
-                uiUtils.exitEditMode(detailsContainer);
-                uiUtils.updateFabButtonUI(false, handlers.handleSaveActiveTask, handlers.handleShowAddTaskModal);
-            };
-            uiUtils.enterEditMode(detailsContainer, backButtonHandler);
-            uiUtils.updateFabButtonUI(true, handlers.handleSaveActiveTask, handlers.handleShowAddTaskModal);
-            return;
+        modals.openStatusModal(detailsContainer);
+        return;
+    }
+
+    const editBtn = event.target.closest('.edit-btn');
+    if (editBtn) {
+        event.stopPropagation(); // Хорошая практика - останавливать всплытие и здесь
+        const detailsContainer = editBtn.closest('.task-details');
+        const currentlyEditing = document.querySelector('.task-details.edit-mode');
+        if (currentlyEditing && currentlyEditing !== detailsContainer) {
+            await handlers.handleSaveActiveTask();
         }
-        const modalTrigger = event.target.closest('.modal-trigger-field');
-        if (modalTrigger) {
-            const modalType = modalTrigger.dataset.modalType;
-            const activeTaskDetailsElement = modalTrigger.closest('.task-details');
-            if (modalType === 'status') modals.openStatusModal(activeTaskDetailsElement);
-            else if (modalType === 'employee') {
-                const appData = store.getAppData();
-                modals.openEmployeeModal(activeTaskDetailsElement, store.getAllEmployees(), appData.userRole);
-            }
-            else if (modalType === 'project') modals.openProjectModal(activeTaskDetailsElement, store.getAllProjects());
-            return;
+        const backButtonHandler = () => {
+            uiUtils.exitEditMode(detailsContainer);
+            uiUtils.updateFabButtonUI(false, handlers.handleSaveActiveTask, handlers.handleShowAddTaskModal);
+        };
+        uiUtils.enterEditMode(detailsContainer, backButtonHandler);
+        uiUtils.updateFabButtonUI(true, handlers.handleSaveActiveTask, handlers.handleShowAddTaskModal);
+        return;
+    }
+
+    const modalTrigger = event.target.closest('.modal-trigger-field');
+    if (modalTrigger) {
+        event.stopPropagation(); // И здесь тоже
+        const modalType = modalTrigger.dataset.modalType;
+        const activeTaskDetailsElement = modalTrigger.closest('.task-details');
+        if (modalType === 'status') modals.openStatusModal(activeTaskDetailsElement);
+        else if (modalType === 'employee') {
+            const appData = store.getAppData();
+            modals.openEmployeeModal(activeTaskDetailsElement, store.getAllEmployees(), appData.userRole);
         }
-        const taskHeader = event.target.closest('.task-header');
-        if (taskHeader) {
-            if (event.target.closest('.status-action-area')) return;
-            const detailsContainer = taskHeader.nextElementSibling;
-            const currentlyOpen = document.querySelector('.task-details.expanded');
-            
-            if (currentlyOpen && currentlyOpen !== detailsContainer) {
-                currentlyOpen.classList.remove('expanded');
-                setTimeout(() => { currentlyOpen.innerHTML = ''; }, 300);
-            }
-            if (!detailsContainer.innerHTML) {
-                const appData = store.getAppData();
-                render.renderTaskDetails(detailsContainer, appData.userRole);
-            }
-            detailsContainer.classList.toggle('expanded');
-            if (!detailsContainer.classList.contains('expanded')) {
-                setTimeout(() => { detailsContainer.innerHTML = ''; }, 300);
-            }
-            return;
+        else if (modalType === 'project') modals.openProjectModal(activeTaskDetailsElement, store.getAllProjects());
+        return;
+    }
+
+    const taskHeader = event.target.closest('.task-header');
+    if (taskHeader) {
+        // Эта проверка больше не нужна благодаря stopPropagation(), но можно оставить для надежности
+        if (event.target.closest('.status-action-area')) return; 
+        
+        const detailsContainer = taskHeader.nextElementSibling;
+        const currentlyOpen = document.querySelector('.task-details.expanded');
+        
+        if (currentlyOpen && currentlyOpen !== detailsContainer) {
+            currentlyOpen.classList.remove('expanded');
+            setTimeout(() => { currentlyOpen.innerHTML = ''; }, 300);
         }
-        const projectHeader = event.target.closest('.project-header');
-        if (projectHeader) {
-            projectHeader.nextElementSibling.classList.toggle('expanded');
+        
+        if (!detailsContainer.innerHTML) {
+            const appData = store.getAppData();
+            render.renderTaskDetails(detailsContainer, appData.userRole);
         }
-    });
+        
+        detailsContainer.classList.toggle('expanded');
+        
+        if (!detailsContainer.classList.contains('expanded')) {
+            setTimeout(() => { detailsContainer.innerHTML = ''; }, 300);
+        }
+        return;
+    }
+
+    const projectHeader = event.target.closest('.project-header');
+    if (projectHeader) {
+        projectHeader.nextElementSibling.classList.toggle('expanded');
+    }
+});
 
     let draggedElement = null;
 

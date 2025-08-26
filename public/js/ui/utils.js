@@ -118,3 +118,105 @@ export function exitEditMode(detailsContainer) {
     tg.BackButton.hide();
     tg.BackButton.offClick(exitEditMode);
 }
+
+/**
+ * Показывает кастомное уведомление вверху экрана.
+ * @param {string} message - Сообщение для отображения.
+ * @param {string} type - Тип уведомления ('success' или 'error').
+ */
+export function showNotification(message, type = 'success') {
+    // Удаляем старое уведомление, если оно есть
+    const oldNotification = document.querySelector('.notification');
+    if (oldNotification) {
+        oldNotification.remove();
+    }
+
+    // Создаем новый элемент уведомления
+    const notification = document.createElement('div');
+    notification.className = `notification ${type}`;
+    notification.textContent = message;
+    document.body.appendChild(notification);
+
+    // Показываем уведомление
+    setTimeout(() => {
+        notification.classList.add('show');
+    }, 10); // Небольшая задержка для срабатывания CSS-анимации
+
+    // Скрываем и удаляем уведомление через 3 секунды
+    setTimeout(() => {
+        notification.classList.remove('show');
+        setTimeout(() => {
+            notification.remove();
+        }, 500); // Ждем окончания анимации скрытия
+    }, 3000);
+}
+
+/**
+ * Универсальная функция для отображения уведомлений пользователю.
+ * @param {string} message - Текст сообщения.
+ * @param {string} type - Тип сообщения ('success', 'error', 'info'). По умолчанию 'info'.
+ */
+export function showMessage(message, type = 'info') {
+    // Определяем цвет в зависимости от типа сообщения
+    let notificationType = 'success'; // По умолчанию зеленый
+    if (type === 'error') {
+        notificationType = 'error'; // Красный для ошибок
+    }
+    // Для 'info' можно добавить отдельный стиль, но пока используем 'success'
+    
+    showNotification(message, notificationType);
+
+    // Добавляем тактильный отклик для важных сообщений
+    if (window.Telegram.WebApp.HapticFeedback) {
+        if (type === 'success') {
+            window.Telegram.WebApp.HapticFeedback.notificationOccurred('success');
+        } else if (type === 'error') {
+            window.Telegram.WebApp.HapticFeedback.notificationOccurred('error');
+        }
+    }
+    
+    // Также выводим ошибки в консоль для удобства отладки
+    if (type === 'error') {
+        console.error("App Message (Error):", message);
+    } else {
+        console.log("App Message (Info/Success):", message);
+    }
+}
+
+/**
+ * Получает текущее состояние (свернут/развернут) всех проектов на странице.
+ * @returns {Object} Объект, где ключ - название проекта, значение - true (развернут) или false (свернут).
+ */
+/**
+ * Получает текущее состояние (свернут/развернут) всех проектов на странице.
+ * @returns {Object} Объект, где ключ - название проекта, значение - true (развернут) или false (свернут).
+ */
+/**
+ * Получает текущее состояние (свернут/развернут) всех проектов на странице.
+ * @returns {Object} Объект, где ключ - название проекта, значение - true (развернут) или false (свернут).
+ */
+export function getAccordionState() {
+    const state = {};
+    document.querySelectorAll('#main-content .card').forEach(card => {
+        const projectNameElement = card.querySelector('.project-header h2');
+        if (projectNameElement) {
+            const projectName = projectNameElement.textContent;
+            const content = card.querySelector('.collapsible-content');
+            // Проверяем, есть ли у контента класс .expanded
+            const isExpanded = content && content.classList.contains('expanded');
+            state[projectName] = isExpanded;
+        }
+    });
+    return state;
+}
+
+/**
+ * Принудительно сворачивает все открытые карточки задач и очищает их содержимое.
+ */
+export function collapseAllTaskDetails() {
+    document.querySelectorAll('.task-details.expanded').forEach(detailsContainer => {
+        detailsContainer.classList.remove('expanded');
+        // Очищаем содержимое, чтобы убрать "остаточную" верхушку
+        detailsContainer.innerHTML = ''; 
+    });
+}

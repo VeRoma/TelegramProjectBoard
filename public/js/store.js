@@ -4,6 +4,7 @@
 let _appData = {};
 let _allProjects = [];
 let _allEmployees = [];
+let _allStatuses = [];
 
 /**
  * Сохраняет все начальные данные приложения в хранилище.
@@ -14,6 +15,7 @@ export function setAppData(data) {
     _appData = data;
     _allProjects = data.allProjects || [];
     _allEmployees = data.allEmployees || [];
+    _allStatuses = data.allStatuses || [];
 }
 
 /**
@@ -26,7 +28,7 @@ export function getAppData() {
 
 /**
  * Возвращает массив со всеми проектами.
- * @returns {Array<string>}
+ * @returns {Array<object>}
  */
 export function getAllProjects() {
     return _allProjects;
@@ -41,13 +43,24 @@ export function getAllEmployees() {
 }
 
 /**
- * Находит задачу и ее проект по rowIndex.
- * @param {number} rowIndex - Уникальный номер строки задачи.
+ * Возвращает массив со всеми статусами.
+ * @returns {Array<object>}
+ */
+export function getAllStatuses() {
+    return _allStatuses;
+}
+
+/**
+ * Находит задачу и ее проект по taskId.
+ * @param {string} taskId - Уникальный идентификатор задачи.
  * @returns {{task: object|null, project: object|null}}
  */
-export function findTask(rowIndex) {
-    for (const project of _appData.projects || []) {
-        const task = project.tasks.find(t => t.rowIndex == rowIndex);
+export function findTask(taskId) {
+    if (!_appData.projects) return { task: null, project: null };
+    
+    for (const project of _appData.projects) {
+        // Ищем задачу по taskId
+        const task = project.tasks.find(t => t.taskId == taskId);
         if (task) return { task, project };
     }
     return { task: null, project: null };

@@ -41,7 +41,7 @@ module.exports = {
         FINISH_DATE: 'finish_date',
         // Технические поля, которые мы используем
 
-        ROW_INDEX: 'row_index' // Физический номер строки для быстрых обновлений
+        // ROW_INDEX: 'row_index' // Физический номер строки для быстрых обновлений
     },
 
     // Названия колонок для листа "Users"
@@ -73,6 +73,7 @@ module.exports = {
         STATUS_ID: 'status_id',
         STATUS_NAME: 'name',
         ICON: 'icon',
+        ORDER: 'order',
     },
 
     // Шаблоны сообщений для Telegram бота

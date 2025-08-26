@@ -18,6 +18,7 @@ const loadSheetDataMiddleware = async (req, res, next) => {
             users: doc.sheetsByTitle[SHEET_NAMES.USERS],
             members: doc.sheetsByTitle[SHEET_NAMES.MEMBERS],
             statuses: doc.sheetsByTitle[SHEET_NAMES.STATUSES],
+            logs: doc.sheetsByTitle[SHEET_NAMES.LOGS]
         };
         if (!req.sheets.tasks || !req.sheets.projects || !req.sheets.users || !req.sheets.statuses) {
             return res.status(500).json({ error: `Обязательные листы не найдены.` });
@@ -34,8 +35,6 @@ const getSheet = async (sheetTitle) => {
     if (!sheet) throw new Error(`Sheet "${sheetTitle}" not found.`);
     return sheet;
 };
-
-// --- Функции для работы со справочниками ---
 
 const getAllUsers = async () => {
     const sheet = await getSheet(SHEET_NAMES.USERS);
@@ -74,6 +73,8 @@ const getAllStatuses = async () => {
     return rows.map(row => ({
         statusId: row.get(STATUS_COLUMNS.STATUS_ID),
         name: row.get(STATUS_COLUMNS.STATUS_NAME),
+        icon: row.get(STATUS_COLUMNS.ICON),
+        order: parseInt(row.get(STATUS_COLUMNS.ORDER), 10) || 99
     }));
 };
 
@@ -82,12 +83,6 @@ const getTasks = async () => {
     return await tasksSheet.getRows();
 };
 
-// --- Восстановленные функции, адаптированные под новую структуру ---
-
-// Эта функция теперь синоним getAllUsers для совместимости
-const getAllEmployees = getAllUsers;
-
-// Ищем пользователя по его TG UserID
 const getEmployeeById = async (tgUserId) => {
     const allUsers = await getAllUsers();
     return allUsers.find(user => user.tgUserId == tgUserId);
@@ -98,12 +93,104 @@ const getOwnerEmployee = async () => {
     return allUsers.find(user => user.role === EMPLOYEE_ROLES.OWNER);
 };
 
-// "Заглушки" для функций, которые мы реализуем на следующих этапах
-const updateTaskInSheet = async () => Promise.resolve();
-const addTaskToSheet = async () => Promise.resolve([]);
-const updateTaskPrioritiesInSheet = async () => Promise.resolve();
-const logUserAccess = async () => Promise.resolve();
+const updateTaskInSheet = async (taskData, modifierName) => {
+    const tasksSheet = await getSheet(SHEET_NAMES.TASKS);
+    const rows = await tasksSheet.getRows();
+    const rowToUpdate = rows.find(row => row.get(TASK_COLUMNS.TASK_ID) == taskData.taskId);
 
+    if (!rowToUpdate) {
+        throw new Error(ERROR_MESSAGES.TASK_NOT_FOUND);
+    }
+    
+    const currentVersion = parseInt(rowToUpdate.get(TASK_COLUMNS.VERSION) || 0);
+    if (taskData.version !== undefined && taskData.version !== currentVersion) {
+        throw new Error(ERROR_MESSAGES.TASK_UPDATE_CONFLICT);
+    }
+
+    rowToUpdate.set(TASK_COLUMNS.NAME, taskData.name);
+    rowToUpdate.set(TASK_COLUMNS.STATUS_ID, taskData.statusId);
+    rowToUpdate.set(TASK_COLUMNS.PROJECT_ID, taskData.projectId);
+    
+    rowToUpdate.set(TASK_COLUMNS.VERSION, currentVersion + 1);
+    rowToUpdate.set(TASK_COLUMNS.MODIFIED_BY, modifierName);
+    rowToUpdate.set(TASK_COLUMNS.MODIFIED_AT, new Date().toLocaleString('ru-RU'));
+
+    await rowToUpdate.save();
+    return currentVersion + 1;
+};
+
+const addTaskToSheet = async (newTaskData, creatorName) => {
+    const tasksSheet = await getSheet(SHEET_NAMES.TASKS);
+    const now = new Date().toLocaleString('ru-RU');
+    
+    // Генерируем новый task_id. Простой способ - найти максимальный существующий и прибавить 1.
+    const rows = await tasksSheet.getRows();
+    const maxId = rows.reduce((max, row) => Math.max(max, parseInt(row.get(TASK_COLUMNS.TASK_ID), 10) || 0), 0);
+    const newTaskId = maxId + 1;
+
+    const newRowData = {
+        [TASK_COLUMNS.TASK_ID]: newTaskId,
+        [TASK_COLUMNS.NAME]: newTaskData.name,
+        [TASK_COLUMNS.PROJECT_ID]: newTaskData.projectId,
+        [TASK_COLUMNS.USER_ID]: newTaskData.responsibleUserIds[0], // Основной ответственный
+        [TASK_COLUMNS.STATUS_ID]: newTaskData.statusId,
+        [TASK_COLUMNS.PRIORITY]: newTaskData.priority,
+        [TASK_COLUMNS.VERSION]: 0,
+        [TASK_COLUMNS.MODIFIED_BY]: creatorName,
+        [TASK_COLUMNS.MODIFIED_AT]: now,
+        [TASK_COLUMNS.AUTHOR_USER_ID]: newTaskData.creatorId
+    };
+
+    const addedRow = await tasksSheet.addRow(newRowData);
+    
+    // Логика для добавления остальных ответственных в таблицу Members должна быть здесь, если требуется
+    
+    return [addedRow];
+};
+
+const updateTaskPrioritiesInSheet = async (tasksToUpdate) => {
+    try {
+        const sheet = await getSheet(SHEET_NAMES.TASKS);
+        const rows = await sheet.getRows();
+
+        const rowMap = new Map();
+        rows.forEach(row => {
+            rowMap.set(row.get(TASK_COLUMNS.TASK_ID), row);
+        });
+
+        const promises = tasksToUpdate.map(task => {
+            const row = rowMap.get(task.taskId);
+            if (row) {
+                if (task.statusId !== undefined) {
+                    row.set(TASK_COLUMNS.STATUS_ID, task.statusId);
+                }
+                if (task.priority !== undefined) {
+                    row.set(TASK_COLUMNS.PRIORITY, task.priority);
+                }
+                return row.save();
+            }
+            return Promise.resolve();
+        });
+
+        await Promise.all(promises);
+        return { success: true };
+    } catch (error) {
+        console.error('Error updating priorities in sheet:', error);
+        throw new Error(ERROR_MESSAGES.GOOGLE_SHEET_UPDATE_ERROR);
+    }
+};
+
+const logUserAccess = async (user) => {
+    const logSheet = doc.sheetsByTitle[SHEET_NAMES.LOGS];
+    if (!logSheet) return;
+    await logSheet.addRow({
+        Timestamp: new Date().toISOString(),
+        UserID: user.id,
+        Username: user.username || '',
+        FirstName: user.first_name || '',
+        LastName: user.last_name || ''
+    });
+};
 
 module.exports = {
     loadSheetDataMiddleware,
@@ -113,10 +200,8 @@ module.exports = {
     getAllMembers,
     getAllStatuses,
     getTasks,
-    // --- Восстанавливаем экспорты ---
     getEmployeeById,
     getOwnerEmployee,
-    getAllEmployees,
     updateTaskInSheet,
     addTaskToSheet,
     updateTaskPrioritiesInSheet,

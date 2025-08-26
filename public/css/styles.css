@@ -337,3 +337,35 @@ body[style*="--tg-color-scheme: dark"] .task-status-checker {
             rgba(0, 123, 255, 0.1) 10px);
     transition: padding-bottom 0.2s ease-in-out;
 }
+
+/* --- Стили для уведомлений --- */
+.notification {
+    position: fixed;
+    top: -100px;
+    /* Изначально скрыто за экраном */
+    left: 50%;
+    transform: translateX(-50%);
+    padding: 12px 20px;
+    border-radius: 8px;
+    color: #fff;
+    font-size: 14px;
+    font-weight: 500;
+    z-index: 1000;
+    transition: top 0.5s ease-in-out;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.notification.show {
+    top: 20px;
+    /* Показываем вверху экрана */
+}
+
+.notification.success {
+    background-color: #28a745;
+    /* Зеленый цвет для успеха */
+}
+
+.notification.error {
+    background-color: #dc3545;
+    /* Красный цвет для ошибки */
+}

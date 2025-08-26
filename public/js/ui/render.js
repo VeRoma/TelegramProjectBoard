@@ -1,11 +1,11 @@
-import { STATUSES } from '../data/statuses.js';
+import * as store from '../store.js';
 
-function renderTaskCard(task, isUserView) {
+function renderTaskCard(task, isUserView, statuses) {
     const taskDataString = JSON.stringify(task).replace(/'/g, '&apos;');
     const headerTopLine = isUserView ? task.project : (task.responsible || 'Не назначен');
-    const statusIcon = (STATUSES.find(s => s.name === task.status) || {}).icon || '';
+    const statusIcon = (statuses.find(s => s.name === task.status) || {}).icon || '';
 
-    return `<div class="card rounded-xl shadow-md overflow-hidden" draggable="true" data-task-id="${task.rowIndex}" data-status-group="${task.status}">
+    return `<div class="card rounded-xl shadow-md overflow-hidden" draggable="true" data-task-id="${task.taskId}" data-status-group="${task.status}">
                 <div class="task-header p-3 flex justify-between items-center gap-3 cursor-pointer select-none">
                     <div class="flex-grow min-w-0">
                         <p class="text-xs pointer-events-none" style="color: var(--tg-theme-hint-color);">${headerTopLine}</p>
@@ -14,18 +14,18 @@ function renderTaskCard(task, isUserView) {
                     <div class="task-status-checker status-action-area" data-status="${task.status}">
                         ${statusIcon}
                     </div>
-                </div>                
-                <div id="task-details-${task.rowIndex}" class="task-details collapsible-content px-4 pb-4" data-version="${task.version}" data-task='${taskDataString}'></div>
+                </div>              
+                <div id="task-details-${task.taskId}" class="task-details collapsible-content px-4 pb-4" data-version="${task.version}" data-task='${taskDataString}'></div>
             </div>`;
 }
 
-export function renderProjects(projects, userName, userRole) {
-    const appHeader = document.getElementById('app-header');
+export function renderProjects(projects, userName, userRole, expandedState = {}) {
     const mainContainer = document.getElementById('main-content');
-    appHeader.classList.add('hidden-header');
     const projectsContainer = document.createElement('div');
     projectsContainer.id = 'projects-container';
     projectsContainer.className = 'space-y-4';
+
+    const statuses = store.getAllStatuses();
 
     if (!projects || projects.length === 0) {
         mainContainer.innerHTML = `<div class="p-4 rounded-lg text-center" style="background-color: var(--tg-theme-secondary-bg-color);">Проекты не найдены.</div>`;
@@ -44,8 +44,8 @@ export function renderProjects(projects, userName, userRole) {
         }
 
         allUserTasks.sort((a, b) => {
-            const orderA = (STATUSES.find(s => s.name === a.status) || { order: 99 }).order;
-            const orderB = (STATUSES.find(s => s.name === b.status) || { order: 99 }).order;
+            const orderA = (statuses.find(s => s.name === a.status) || { order: 99 }).order;
+            const orderB = (statuses.find(s => s.name === b.status) || { order: 99 }).order;
             if (orderA !== orderB) return orderA - orderB;
             return (a.priority || 999) - (b.priority || 999);
         });
@@ -56,28 +56,28 @@ export function renderProjects(projects, userName, userRole) {
             return acc;
         }, {});
         
-        const sortedStatusKeys = Object.keys(tasksByStatus).sort((a,b) => (STATUSES.find(s => s.name === a) || {}).order - (STATUSES.find(s => s.name === b) || {}).order);
+        const sortedStatusKeys = Object.keys(tasksByStatus).sort((a,b) => (statuses.find(s => s.name === a) || {}).order - (statuses.find(s => s.name === b) || {}).order);
         
         let userHtml = '';
         sortedStatusKeys.forEach(status => {
             const tasksInGroup = tasksByStatus[status];
-            const statusIcon = (STATUSES.find(s => s.name === status) || {}).icon || '';
+            const statusIcon = (statuses.find(s => s.name === status) || {}).icon || '';
             userHtml += `
                 <div class="status-group p-2">
                     <h3 class="status-group-header text-sm font-bold p-2" style="color: var(--tg-theme-hint-color);">${statusIcon} ${status}</h3>
                     <div class="tasks-list space-y-2" data-status-group="${status}">
-                        ${tasksInGroup.map(task => renderTaskCard(task, true)).join('')}
+                        ${tasksInGroup.map(task => renderTaskCard(task, true, statuses)).join('')}
                     </div>
                 </div>
             `;
         });
         projectsContainer.innerHTML = userHtml;
 
-    } else { // Вид для admin/owner/gap
-        projects.forEach(project => { // "project" здесь может быть и проектом, и сотрудником
+    } else {
+        projects.forEach(project => {
             project.tasks.sort((a, b) => {
-                const orderA = (STATUSES.find(s => s.name === a.status) || { order: 99 }).order;
-                const orderB = (STATUSES.find(s => s.name === b.status) || { order: 99 }).order;
+                const orderA = (statuses.find(s => s.name === a.status) || { order: 99 }).order;
+                const orderB = (statuses.find(s => s.name === b.status) || { order: 99 }).order;
                 if (orderA !== orderB) return orderA - orderB;
                 return (a.priority || 999) - (b.priority || 999);
             });
@@ -92,23 +92,22 @@ export function renderProjects(projects, userName, userRole) {
                 acc[task.status].push(task);
                 return acc;
             }, {});
-            const sortedStatusKeys = Object.keys(tasksByStatus).sort((a,b) => (STATUSES.find(s => s.name === a) || {}).order - (STATUSES.find(s => s.name === b) || {}).order);
+            const sortedStatusKeys = Object.keys(tasksByStatus).sort((a,b) => (statuses.find(s => s.name === a) || {}).order - (statuses.find(s => s.name === b) || {}).order);
 
             let projectHtml = '';
             sortedStatusKeys.forEach(status => {
                 const tasksInGroup = tasksByStatus[status];
-                const statusIcon = (STATUSES.find(s => s.name === status) || {}).icon || '';
+                const statusIcon = (statuses.find(s => s.name === status) || {}).icon || '';
                 projectHtml += `
                     <div class="status-group p-2">
                         <h3 class="status-group-header text-sm font-bold p-2" style="color: var(--tg-theme-hint-color);">${statusIcon} ${status}</h3>
                         <div class="tasks-list space-y-2" data-status-group="${status}">
-                            ${tasksInGroup.map(task => renderTaskCard(task, false)).join('')}
+                            ${tasksInGroup.map(task => renderTaskCard(task, false, statuses)).join('')}
                         </div>
                     </div>
                 `;
             });
             
-            // Определяем, что показывать в заголовке
             const title = project.name;
             const tasksInWorkCount = project.tasks.filter(t => t.status === 'В работе').length;
             const subtitle = `${tasksInWorkCount} задач в работе`;
@@ -125,15 +124,28 @@ export function renderProjects(projects, userName, userRole) {
     
     mainContainer.innerHTML = '';
     mainContainer.appendChild(projectsContainer);
+
+    if (userRole !== 'user' && Object.keys(expandedState).length > 0) {
+        projectsContainer.querySelectorAll('.card').forEach(card => {
+            const titleElement = card.querySelector('.project-header h2');
+            if (titleElement) {
+                const projectName = titleElement.textContent;
+                if (expandedState[projectName] === true) {
+                    const content = card.querySelector('.project-content');
+                    if (content) {
+                        content.classList.add('expanded');
+                    }
+                }
+            }
+        });
+    }
 }
 
 export function renderTaskDetails(detailsContainer, userRole) {
     const task = JSON.parse(detailsContainer.dataset.task);
 
-    // В зависимости от роли, создаем разный HTML для поля "Ответственный"
     let responsibleFieldHtml = '';
     if (userRole === 'user') {
-        // Для user'а - простое текстовое поле без возможности редактирования
         responsibleFieldHtml = `
             <div>
                 <label class="text-xs font-medium text-gray-500">Ответственный</label>
@@ -142,7 +154,6 @@ export function renderTaskDetails(detailsContainer, userRole) {
                 </div>
             </div>`;
     } else {
-        // Для admin/owner - поле с возможностью вызова модального окна
         responsibleFieldHtml = `
             <div>
                 <label class="text-xs font-medium text-gray-500">Ответственный</label>
@@ -158,7 +169,6 @@ export function renderTaskDetails(detailsContainer, userRole) {
 
     detailsContainer.innerHTML = `
         <div class="p-4 rounded-lg space-y-4 edit-container">
-            <input type="hidden" class="task-row-index" value="${task.rowIndex}">
             <div class="flex justify-between items-start">
                 <p class="font-bold text-lg view-field w-full">${task.name}</p>
                 <button class="edit-btn p-2 rounded-full ml-4 flex-shrink-0"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.5L14.732 3.732z"></path></svg></button>

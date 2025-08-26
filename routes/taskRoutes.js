@@ -58,13 +58,20 @@ router.post('/appdata', async (req, res) => {
             const responsibleNames = [...responsibleIds].map(id => allUsers.find(u => u.userId === id)?.name).filter(Boolean);
 
             return {
+                // Добавляем ID задачи
+                taskId: task.get(TASK_COLUMNS.TASK_ID), 
+                
                 name: task.get(TASK_COLUMNS.NAME),
                 status: status ? status.name : 'Неизвестный статус',
+                
+                // Добавляем ID статуса - он понадобится на клиенте
+                statusId: statusId, 
+                
                 responsible: responsibleNames.join(', '),
                 project: project ? project.projectName : 'Без проекта',
                 priority: priority,
-                rowIndex: task.rowNumber, 
-                // ... добавляем остальные поля по мере необходимости
+                
+               
             };
         });
 
@@ -83,7 +90,8 @@ router.post('/appdata', async (req, res) => {
             allProjects: allProjects.map(p => p.projectName), 
             userName, 
             userRole,
-            allEmployees: allUsers
+            allEmployees: allUsers,
+            allStatuses: allStatuses
         });
 
     } catch (error) {
@@ -94,7 +102,32 @@ router.post('/appdata', async (req, res) => {
 
 // "Заглушки" для функций, которые мы реализуем на следующих этапах
 router.post('/updatetask', async (req, res) => res.status(501).json({ error: 'Not implemented yet' }));
-router.post('/updatepriorities', async (req, res) => res.status(501).json({ error: 'Not implemented yet' }));
+router.post('/updatepriorities', async (req, res) => {
+    try {
+        const { tasks } = req.body;
+
+        if (!tasks || !Array.isArray(tasks) || tasks.length === 0) {
+            return res.status(400).json({ error: 'Invalid tasks data provided.' });
+        }
+        
+        // Здесь нам нужно будет преобразовать имена статусов в их ID
+        const allStatuses = await googleSheetsService.getAllStatuses();
+        const statusMap = new Map(allStatuses.map(s => [s.name, s.statusId]));
+
+        const tasksToUpdate = tasks.map(task => ({
+            ...task,
+            status: statusMap.get(task.status) || '1' // ID статуса по умолчанию
+        }));
+
+        await googleSheetsService.updateTaskPrioritiesInSheet(tasksToUpdate);
+
+        res.status(200).json({ status: 'success', message: 'Priorities updated successfully.' });
+
+    } catch (error) {
+        console.error('Error in /api/updatepriorities:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
 router.post('/addtask', async (req, res) => res.status(501).json({ error: 'Not implemented yet' }));
 
 module.exports = router;

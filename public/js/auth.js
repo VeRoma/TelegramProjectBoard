@@ -1,7 +1,7 @@
 import * as api from './api.js';
 import * as render from './ui/render.js';
 import * as uiUtils from './ui/utils.js';
-import * as store from './store.js'; // Импортируем наше хранилище
+import * as store from './store.js';
 
 function getDebugUserId() {
     const urlParams = new URLSearchParams(window.location.search);
@@ -22,7 +22,7 @@ export async function initializeApp() {
 
     if (!user || !user.id) {
         uiUtils.showAccessDeniedScreen();
-        return false; // Возвращаем false в случае неудачи
+        return false;
     }
 
     window.currentUserId = user.id;
@@ -36,20 +36,14 @@ export async function initializeApp() {
             const data = await api.loadAppData({ user });
             
             if (data && data.projects) {
-                // --- ГЛАВНОЕ ИЗМЕНЕНИЕ: Сохраняем данные в хранилище ---
+                // Сохраняем все данные в хранилище
                 store.setAppData(data);
                 
+                // Просто рендерим проекты. Все data-атрибуты уже будут на месте.
                 render.renderProjects(data.projects, data.userName, data.userRole);
                 
-                // Устанавливаем data-атрибуты после рендеринга
-                document.querySelectorAll('.task-details').forEach(el => {
-                    const rowIndex = el.id.split('-')[2];
-                    const { task } = store.findTask(rowIndex);
-                    if (task) {
-                        el.dataset.version = task.version;
-                        el.dataset.task = JSON.stringify(task).replace(/'/g, '&apos;');
-                    }
-                });
+                // --- УДАЛЕН ИЗБЫТОЧНЫЙ БЛОК forEach ---
+
                 return true; // Возвращаем true в случае успеха
             } else {
                 render.renderProjects([], verification.name, verification.role);
