@@ -37,6 +37,16 @@ export function openEmployeeModal(activeTaskDetailsElement, allEmployees, userRo
     const isLimitedView = !['owner', 'admin'].includes(userRole);
 
     if (!isLimitedView) {
+        employeeModal.innerHTML = `
+            <div class="modal-content">
+                <div class="p-4 border-b" style="border-color: var(--tg-theme-hint-color);">
+                    <h3 class="text-lg font-bold">Ответственные</h3>
+                </div>
+                <div class="modal-body">
+                    <p>${currentResponsibleText || 'Не назначены'}</p>
+                </div>
+            </div>`;
+    } else {
         const currentResponsible = currentResponsibleText.split(',').map(n => n.trim());
         const employeesCheckboxes = allEmployees.map(e => `<label class="flex items-center space-x-3 p-3 rounded-md hover:bg-gray-200"><input type="checkbox" value="${e.name}" ${currentResponsible.includes(e.name) ? 'checked' : ''} class="employee-checkbox w-4 h-4 rounded"><span>${e.name}</span></label>`).join('');
         
@@ -50,16 +60,6 @@ export function openEmployeeModal(activeTaskDetailsElement, allEmployees, userRo
                     <button class="modal-select-btn px-4 py-2 rounded-lg">Выбрать</button>
                 </div>
             </div>`;
-    } else {
-        employeeModal.innerHTML = `
-            <div class="modal-content">
-                <div class="p-4 border-b" style="border-color: var(--tg-theme-hint-color);">
-                    <h3 class="text-lg font-bold">Ответственные</h3>
-                </div>
-                <div class="modal-body">
-                    <p>${currentResponsibleText || 'Не назначены'}</p>
-                </div>
-            </div>`;
     }
 
     employeeModal.classList.add('active');
@@ -69,7 +69,6 @@ export function openEmployeeModal(activeTaskDetailsElement, allEmployees, userRo
 export function openProjectModal(activeTaskDetailsElement, allProjects) {
     document.body.classList.add('overflow-hidden');
     const currentProject = activeTaskDetailsElement.querySelector('.task-project-view').textContent;
-    // allProjects теперь массив объектов { projectId, projectName }
     projectModal.innerHTML = `<div class="modal-content"><div class="p-4 border-b" style="border-color: var(--tg-theme-hint-color);"><h3 class="text-lg font-bold">Выберите проект</h3></div><div class="modal-body">${allProjects.map(p => `<label class="flex items-center space-x-3 p-3 rounded-md hover:bg-gray-200"><input type="radio" name="project" value="${p.projectName}" ${p.projectName === currentProject ? 'checked' : ''} class="w-4 h-4"><span>${p.projectName}</span></label>`).join('')}</div><div class="p-2 border-t flex justify-end" style="border-color: var(--tg-theme-hint-color);"><button class="modal-select-btn px-4 py-2 rounded-lg">Выбрать</button></div></div>`;
     projectModal.classList.add('active');
     projectModal.dataset.targetElement = `#${activeTaskDetailsElement.id}`;
@@ -82,7 +81,9 @@ export function openAddTaskModal(allProjects, allEmployees, userRole, userName) 
     
     let responsibleHtml = '';
     const isLimitedView = !['owner', 'admin'].includes(userRole);
-    if (!isLimitedView) {  
+    if (!isLimitedView) {
+        responsibleHtml = ''; // Для ограниченных ролей блока выбора нет
+    } else {  
         const employeesCheckboxes = allEmployees.map(e => `<label class="flex items-center space-x-3 p-3 rounded-md hover:bg-gray-200"><input type="checkbox" value="${e.name}" class="employee-checkbox w-4 h-4 rounded"><span>${e.name}</span></label>`).join('');
         responsibleHtml = `
             <div>
@@ -119,10 +120,6 @@ export function openAddTaskModal(allProjects, allEmployees, userRole, userName) 
                     <div id="new-task-status-toggle" class="status-toggle">
                         ${statusToggleHtml} 
                     </div>
-                </div>
-                <div>
-                    <label class="text-xs font-medium text-gray-500">Сообщение исполнителю</label>
-                    <textarea id="new-task-message" rows="2" class="details-input mt-1"></textarea>
                 </div>
                 ${responsibleHtml}
             </div>

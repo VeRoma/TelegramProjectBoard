@@ -11,8 +11,7 @@ export async function handleSaveActiveTask() {
     const appData = store.getAppData();
     const responsibleText = activeEditElement.querySelector('.task-responsible-view').textContent;
     const selectedEmployees = responsibleText ? responsibleText.split(',').map(s => s.trim()).filter(Boolean) : [];
-    
-    // Ищем по taskId из data-атрибута родительской карточки
+
     const taskId = activeEditElement.closest('[data-task-id]').dataset.taskId;
     const { task: taskInAppData } = store.findTask(taskId);
 
@@ -76,7 +75,6 @@ export async function handleCreateTask(taskData) {
     const maxPriority = Math.max(0, ...tasksInGroup.map(t => t.priority));
     taskData.priority = maxPriority + 1;
     
-    
     const tempTaskId = `temp_${Date.now()}`;
     const optimisticTask = { ...taskData, taskId: tempTaskId, version: 0 };
     let targetProject = appData.projects.find(p => p.name === optimisticTask.project);
@@ -95,7 +93,6 @@ export async function handleCreateTask(taskData) {
         const result = await api.addTask({ newTaskData: taskData, creatorName: appData.userName });
         if (result.status === 'success' && result.task) {
             const finalTask = result.task;
-            // Ищем по tempTaskId
             const taskToUpdate = targetProject.tasks.find(t => t.taskId === tempTaskId);
             if (taskToUpdate) Object.assign(taskToUpdate, finalTask);
             
@@ -112,7 +109,6 @@ export async function handleCreateTask(taskData) {
     }
 }
 
-// Теперь функция принимает taskId
 export async function handleStatusUpdate(taskId, newStatusName) {
     const appData = store.getAppData();
     const { task, project } = store.findTask(taskId);
@@ -131,7 +127,6 @@ export async function handleStatusUpdate(taskId, newStatusName) {
     if (newStatusName === 'Выполнено') {
         task.priority = 999;
     } else {
-        // Сравниваем по taskId
         const tasksInNewGroup = allTasksForScope.filter(t => t.status === newStatusName && t.taskId !== task.taskId);
         const maxPriority = Math.max(0, ...tasksInNewGroup.map(t => t.priority));
         task.priority = maxPriority + 1;
@@ -147,7 +142,6 @@ export async function handleStatusUpdate(taskId, newStatusName) {
     
     const statuses = store.getAllStatuses();
 
-    // Собираем данные для обновления, используя taskId и statusId
     const tasksToUpdate = [...tasksInOldGroup, task].map(t => {
         const statusId = (statuses.find(s => s.name === t.status) || {}).statusId;
         return {
@@ -185,14 +179,12 @@ export function handleDragDrop(groupName, updatedTaskIdsInGroup, userRole) {
         tasksForScope = projectData.tasks;
     }
 
-    // Используем taskId как ключ
     const taskMap = new Map(tasksForScope.map(t => [t.taskId.toString(), t]));
 
     const tasksToUpdate = updatedTaskIdsInGroup.map((id, index) => {
         const task = taskMap.get(id);
         if (task) {
             task.priority = index + 1;
-            // Передаем taskId и statusId
             return { taskId: task.taskId, priority: task.priority, statusId: task.statusId };
         }
     }).filter(Boolean);
@@ -241,11 +233,11 @@ export function handleSaveNewTaskClick() {
     const statuses = store.getAllStatuses();
     const statusId = (statuses.find(s => s.name === statusName) || {}).statusId;
 
-    const allProjects = store.getAllProjects();
-    const project = allProjects.find(p => p.projectName === projectName);
+    const projects = store.getAllProjects();
+    const project = projects.find(p => p.projectName === projectName);
     const projectId = project ? project.projectId : null;
-
-    const currentUser = allEmployees.find(e => e.name === appData.userName);
+    
+    const currentUser = allEmployees.find(u => u.name === appData.userName);
     const creatorId = currentUser ? currentUser.userId : null;
 
     handleCreateTask({
