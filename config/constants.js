@@ -28,50 +28,51 @@ module.exports = {
 
     // Названия колонок для листа "Tasks"
     TASK_COLUMNS: {
-        TASK_ID: 'TaskID',
-        NAME: 'Name', // В таблице Tasks это колонка "Name"
-        STAGE_ID: 'StageID',
-        PROJECT_ID: 'ProjectID',
-        USER_ID: 'UserID', // Основной ответственный (куратор)
-        STATUS_ID: 'StatusID',
-        PRIORITY: 'Priority',
-        AUTHOR_USER_ID: 'AuthorUserID',
-        VERSION: 'Version',
-        START_DATE: 'StartData',
-        FINISH_DATE: 'FinishData',
+        TASK_ID: 'Task_id',
+        NAME: 'name', // В таблице Tasks это колонка "Name"
+        STAGE_ID: 'stage_id',
+        PROJECT_ID: 'project_id',
+        USER_ID: 'user_id', // Основной ответственный (куратор)
+        STATUS_ID: 'status_id',
+        PRIORITY: 'priority',
+        AUTHOR_USER_ID: 'author_user_id', // Кто создал задачу
+        VERSION: 'version', // Для контроля версий при обновлении задач
+        START_DATE: 'start_date',
+        FINISH_DATE: 'finish_date',
         // Технические поля, которые мы используем
-        MODIFIED_BY: 'ModifiedBy',
-        MODIFIED_AT: 'ModifiedAt',
-        GROUP_ID: 'GroupID', // Для связи задач с несколькими исполнителями
-        ROW_INDEX: 'rowIndex' // Физический номер строки для быстрых обновлений
+
+        ROW_INDEX: 'row_index' // Физический номер строки для быстрых обновлений
     },
 
     // Названия колонок для листа "Users"
     USER_COLUMNS: {
-        USER_ID: 'UserID',
-        NAME: 'Name',
-        ROLE: 'Role',
-        TG_USER_ID: 'TGUserID', 
+        USER_ID: 'user_id',
+        NAME: 'name',
+        ROLE: 'role',
+        TG_USER_ID: 'tg_user_id', // Telegram UserID для уведомлений
     },
 
     // Названия колонок для листа "Projects"
     PROJECT_COLUMNS: {
-        PROJECT_ID: 'ProjectID',
-        PROJECT_NAME: 'Name'
+        PROJECT_ID: 'project_id',
+        PROJECT_NAME: 'name',
+        DESCRIPTION: 'description',
     },
     
     // Названия колонок для листа "Members" (дополнительные участники задачи)
     MEMBER_COLUMNS: {
-        MEMBER_ID: 'MemberID',
-        TASK_ID: 'TaskID',
-        USER_ID: 'UserID'
+        MEMBER_ID: 'member_id',
+        TASK_ID: 'task_id',
+        USER_ID: 'user_id',
+        STATUS_ID: 'status_id',
+        PRIORITY: 'priority',
     },
 
     // Названия колонок для листа "Statuses"
     STATUS_COLUMNS: {
-        STATUS_ID: 'StatusID',
-        STATUS_NAME: 'Name',
-        ICON: 'Icon'
+        STATUS_ID: 'status_id',
+        STATUS_NAME: 'name',
+        ICON: 'icon',
     },
 
     // Шаблоны сообщений для Telegram бота
