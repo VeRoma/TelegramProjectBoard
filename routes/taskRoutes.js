@@ -12,7 +12,6 @@ router.post('/appdata', async (req, res) => {
             return res.status(400).json({ error: ERROR_MESSAGES.USER_OBJECT_REQUIRED });
         }
 
-        // 1. Загружаем все справочники один раз
         const allUsers = await googleSheetsService.getAllUsers();
         const allProjects = await googleSheetsService.getAllProjects();
         const allTasks = await googleSheetsService.getTasks();
@@ -28,7 +27,6 @@ router.post('/appdata', async (req, res) => {
         
         let tasksToProcess = [];
 
-        // 2. Определяем, какие задачи нужно показать пользователю
         if (userRole === 'admin' || userRole === 'owner') {
             tasksToProcess = allTasks;
         } else {
@@ -43,39 +41,33 @@ router.post('/appdata', async (req, res) => {
 
         const validTasks = tasksToProcess.filter(row => row.get(TASK_COLUMNS.NAME));
         
-        // 3. "Обогащаем" задачи реальными именами, подставляя значения по умолчанию
         const enrichedTasks = validTasks.map(task => {
-            const projectId = task.get(TASK_COLUMNS.PROJECT_ID) || '1'; // По умолчанию ID=1
-            const statusId = task.get(TASK_COLUMNS.STATUS_ID) || '1'; // По умолчанию ID=1
-            const priority = parseInt(task.get(TASK_COLUMNS.PRIORITY), 10) || 1; // По умолчанию 1
+            const projectId = task.get(TASK_COLUMNS.PROJECT_ID) || '1';
+            const statusId = task.get(TASK_COLUMNS.STATUS_ID) || '1';
+            const priority = parseInt(task.get(TASK_COLUMNS.PRIORITY), 10) || 1;
 
             const project = allProjects.find(p => p.projectId == projectId);
             const status = allStatuses.find(s => s.statusId == statusId);
             
             const taskId = task.get(TASK_COLUMNS.TASK_ID);
             const memberUserIds = allMembers.filter(m => m.taskId === taskId).map(m => m.userId);
-            const responsibleIds = new Set([task.get(TASK_COLUMNS.USER_ID), ...memberUserIds]);
+            const mainAssigneeId = task.get(TASK_COLUMNS.USER_ID);
+            
+            const responsibleIds = new Set([mainAssigneeId, ...memberUserIds].filter(Boolean));
             const responsibleNames = [...responsibleIds].map(id => allUsers.find(u => u.userId === id)?.name).filter(Boolean);
 
             return {
-                // Добавляем ID задачи
-                taskId: task.get(TASK_COLUMNS.TASK_ID), 
-                
+                taskId: taskId,
                 name: task.get(TASK_COLUMNS.NAME),
                 status: status ? status.name : 'Неизвестный статус',
-                
-                // Добавляем ID статуса - он понадобится на клиенте
-                statusId: statusId, 
-                
+                statusId: statusId,
                 responsible: responsibleNames.join(', '),
                 project: project ? project.projectName : 'Без проекта',
                 priority: priority,
-                
-               
+                version: parseInt(task.get(TASK_COLUMNS.VERSION) || 0, 10)
             };
         });
 
-        // 4. Группируем "обогащенные" задачи по проектам
         const groups = {};
         enrichedTasks.forEach(task => {
             const groupName = task.project;
@@ -87,7 +79,7 @@ router.post('/appdata', async (req, res) => {
         
         res.status(200).json({ 
             projects: Object.values(groups),
-            allProjects: allProjects.map(p => p.projectName), 
+            allProjects: allProjects, 
             userName, 
             userRole,
             allEmployees: allUsers,
@@ -100,8 +92,6 @@ router.post('/appdata', async (req, res) => {
     }
 });
 
-// "Заглушки" для функций, которые мы реализуем на следующих этапах
-router.post('/updatetask', async (req, res) => res.status(501).json({ error: 'Not implemented yet' }));
 router.post('/updatepriorities', async (req, res) => {
     try {
         const { tasks } = req.body;
@@ -110,16 +100,9 @@ router.post('/updatepriorities', async (req, res) => {
             return res.status(400).json({ error: 'Invalid tasks data provided.' });
         }
         
-        // Здесь нам нужно будет преобразовать имена статусов в их ID
-        const allStatuses = await googleSheetsService.getAllStatuses();
-        const statusMap = new Map(allStatuses.map(s => [s.name, s.statusId]));
-
-        const tasksToUpdate = tasks.map(task => ({
-            ...task,
-            status: statusMap.get(task.status) || '1' // ID статуса по умолчанию
-        }));
-
-        await googleSheetsService.updateTaskPrioritiesInSheet(tasksToUpdate);
+        // Клиент уже присылает готовые данные (taskId, statusId, priority),
+        // поэтому просто передаем их дальше.
+        await googleSheetsService.updateTaskPrioritiesInSheet(tasks);
 
         res.status(200).json({ status: 'success', message: 'Priorities updated successfully.' });
 
@@ -128,6 +111,9 @@ router.post('/updatepriorities', async (req, res) => {
         res.status(500).json({ error: error.message });
     }
 });
+
+// Заглушки для будущего функционала
+router.post('/updatetask', async (req, res) => res.status(501).json({ error: 'Not implemented yet' }));
 router.post('/addtask', async (req, res) => res.status(501).json({ error: 'Not implemented yet' }));
 
 module.exports = router;

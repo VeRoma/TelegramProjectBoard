@@ -11,7 +11,7 @@ export async function handleSaveActiveTask() {
     const appData = store.getAppData();
     const responsibleText = activeEditElement.querySelector('.task-responsible-view').textContent;
     const selectedEmployees = responsibleText ? responsibleText.split(',').map(s => s.trim()).filter(Boolean) : [];
-
+    
     const taskId = activeEditElement.closest('[data-task-id]').dataset.taskId;
     const { task: taskInAppData } = store.findTask(taskId);
 
@@ -30,7 +30,12 @@ export async function handleSaveActiveTask() {
     };
 
     try {
-        const result = await api.saveTask({ taskData: updatedTask, modifierName: appData.userName });
+        // Эта функция пока не реализована на сервере
+        // const result = await api.saveTask({ taskData: updatedTask, modifierName: appData.userName });
+        
+        // Имитируем успешный ответ для тестирования UI
+        const result = { status: 'success', newVersion: updatedTask.version + 1 };
+
         if (result.status === 'success') {
             uiUtils.showMessage('Изменения сохранены', 'success');
             Object.assign(taskInAppData, updatedTask, { version: result.newVersion });
@@ -39,18 +44,13 @@ export async function handleSaveActiveTask() {
             activeEditElement.dataset.version = result.newVersion;
 
             uiUtils.exitEditMode(activeEditElement);
-            uiUtils.updateFabButtonUI(false, handleSaveActiveTask, handleShowAddTaskModal);
+            uiUtils.updateFabButtonUI(false, null, handleShowAddTaskModal);
             
             const accordionState = uiUtils.getAccordionState();
             render.renderProjects(appData.projects, appData.userName, appData.userRole, accordionState);
 
         } else {
-            if (result.error && result.error.includes("изменены другим пользователем")) {
-                uiUtils.showMessage(result.error + ' Страница будет перезагружена.', 'error');
-                setTimeout(() => window.location.reload(), 3000);
-            } else {
-                uiUtils.showMessage('Ошибка сохранения: ' + (result.error || 'Неизвестная ошибка'), 'error');
-            }
+             uiUtils.showMessage('Ошибка сохранения: ' + (result.error || 'Неизвестная ошибка'), 'error');
         }
     } catch (error) {
         uiUtils.showMessage('Критическая ошибка сохранения: ' + error.message, 'error');
@@ -91,8 +91,8 @@ export async function handleCreateTask(taskData) {
     
     try {
         const result = await api.addTask({ newTaskData: taskData, creatorName: appData.userName });
-        if (result.status === 'success' && result.task) {
-            const finalTask = result.task;
+        if (result.status === 'success' && result.tasks && result.tasks.length > 0) {
+            const finalTask = result.tasks[0];
             const taskToUpdate = targetProject.tasks.find(t => t.taskId === tempTaskId);
             if (taskToUpdate) Object.assign(taskToUpdate, finalTask);
             

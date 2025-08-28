@@ -1,6 +1,6 @@
 const { GoogleSpreadsheet } = require('google-spreadsheet');
 const { JWT } = require('google-auth-library');
-const { SHEET_NAMES, TASK_COLUMNS, USER_COLUMNS, PROJECT_COLUMNS, MEMBER_COLUMNS, STATUS_COLUMNS, EMPLOYEE_ROLES, ERROR_MESSAGES } = require('../config/constants');
+const { SHEET_NAMES, TASK_COLUMNS, USER_COLUMNS, PROJECT_COLUMNS, MEMBER_COLUMNS, STATUS_COLUMNS, ERROR_MESSAGES } = require('../config/constants');
 
 const serviceAccountAuth = new JWT({
     email: process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL,
@@ -90,7 +90,7 @@ const getEmployeeById = async (tgUserId) => {
 
 const getOwnerEmployee = async () => {
     const allUsers = await getAllUsers();
-    return allUsers.find(user => user.role === EMPLOYEE_ROLES.OWNER);
+    return allUsers.find(user => user.role === 'owner');
 };
 
 const updateTaskInSheet = async (taskData, modifierName) => {
@@ -110,10 +110,7 @@ const updateTaskInSheet = async (taskData, modifierName) => {
     rowToUpdate.set(TASK_COLUMNS.NAME, taskData.name);
     rowToUpdate.set(TASK_COLUMNS.STATUS_ID, taskData.statusId);
     rowToUpdate.set(TASK_COLUMNS.PROJECT_ID, taskData.projectId);
-    
     rowToUpdate.set(TASK_COLUMNS.VERSION, currentVersion + 1);
-    rowToUpdate.set(TASK_COLUMNS.MODIFIED_BY, modifierName);
-    rowToUpdate.set(TASK_COLUMNS.MODIFIED_AT, new Date().toLocaleString('ru-RU'));
 
     await rowToUpdate.save();
     return currentVersion + 1;
@@ -121,9 +118,6 @@ const updateTaskInSheet = async (taskData, modifierName) => {
 
 const addTaskToSheet = async (newTaskData, creatorName) => {
     const tasksSheet = await getSheet(SHEET_NAMES.TASKS);
-    const now = new Date().toLocaleString('ru-RU');
-    
-    // Генерируем новый task_id. Простой способ - найти максимальный существующий и прибавить 1.
     const rows = await tasksSheet.getRows();
     const maxId = rows.reduce((max, row) => Math.max(max, parseInt(row.get(TASK_COLUMNS.TASK_ID), 10) || 0), 0);
     const newTaskId = maxId + 1;
@@ -132,19 +126,14 @@ const addTaskToSheet = async (newTaskData, creatorName) => {
         [TASK_COLUMNS.TASK_ID]: newTaskId,
         [TASK_COLUMNS.NAME]: newTaskData.name,
         [TASK_COLUMNS.PROJECT_ID]: newTaskData.projectId,
-        [TASK_COLUMNS.USER_ID]: newTaskData.responsibleUserIds[0], // Основной ответственный
+        [TASK_COLUMNS.USER_ID]: newTaskData.responsibleUserIds[0],
         [TASK_COLUMNS.STATUS_ID]: newTaskData.statusId,
         [TASK_COLUMNS.PRIORITY]: newTaskData.priority,
         [TASK_COLUMNS.VERSION]: 0,
-        [TASK_COLUMNS.MODIFIED_BY]: creatorName,
-        [TASK_COLUMNS.MODIFIED_AT]: now,
         [TASK_COLUMNS.AUTHOR_USER_ID]: newTaskData.creatorId
     };
 
     const addedRow = await tasksSheet.addRow(newRowData);
-    
-    // Логика для добавления остальных ответственных в таблицу Members должна быть здесь, если требуется
-    
     return [addedRow];
 };
 
@@ -187,8 +176,7 @@ const logUserAccess = async (user) => {
         Timestamp: new Date().toISOString(),
         UserID: user.id,
         Username: user.username || '',
-        FirstName: user.first_name || '',
-        LastName: user.last_name || ''
+        Name: user.first_name || 'N/A'
     });
 };
 
@@ -206,5 +194,6 @@ module.exports = {
     addTaskToSheet,
     updateTaskPrioritiesInSheet,
     logUserAccess,
-    doc
+    doc,
+    getAllEmployees: getAllUsers
 };
