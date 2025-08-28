@@ -7,27 +7,34 @@ const employeeModal = document.getElementById('employee-modal');
 const projectModal = document.getElementById('project-modal');
 const addTaskModal = document.getElementById('add-task-modal');
 
-export function openStatusModal(activeTaskDetailsElement) {
+// Флаг, чтобы контент модального окна статусов генерировался только один раз
+let statusModalContentLoaded = false;
+
+export function openStatusModal(taskId) { // <--- ИЗМЕНЕНИЕ: принимаем taskId
     uiUtils.collapseAllTaskDetails();
     document.body.classList.add('overflow-hidden');
     
-    const statuses = store.getAllStatuses();
-    statuses.sort((a, b) => a.order - b.order);
+    // Генерируем контент только при первом открытии для повышения производительности
+    if (!statusModalContentLoaded) {
+        const statuses = store.getAllStatuses();
+        statuses.sort((a, b) => a.order - b.order);
 
-    statusModal.innerHTML = `
-        <div class="modal-content modal-content-compact">
-            <div class="modal-body p-2">
-                ${statuses.map(status => `
-                    <div class="status-option flex items-center p-3 rounded-lg hover:bg-gray-200 cursor-pointer" data-status-value="${status.name}">
-                        <span class="text-2xl w-8 text-center">${status.icon}</span>
-                        <span class="text-lg ml-3">${status.name}</span>
-                    </div>
-                `).join('')}
-            </div>
-        </div>`;
+        statusModal.innerHTML = `
+            <div class="modal-content modal-content-compact">
+                <div class="modal-body p-2">
+                    ${statuses.map(status => `
+                        <div class="status-option flex items-center p-3 rounded-lg hover:bg-gray-200 cursor-pointer" data-status-value="${status.name}">
+                            <span class="text-2xl w-8 text-center">${status.icon}</span>
+                            <span class="text-lg ml-3">${status.name}</span>
+                        </div>
+                    `).join('')}
+                </div>
+            </div>`;
+        statusModalContentLoaded = true;
+    }
         
     statusModal.classList.add('active');
-    statusModal.dataset.targetElement = `#${activeTaskDetailsElement.id}`;
+    statusModal.dataset.currentTaskId = taskId; 
 }
 
 export function openEmployeeModal(activeTaskDetailsElement, allEmployees, userRole) {
@@ -164,17 +171,18 @@ export function setupModals(onStatusChange) {
             }
 
             if (modal.id === 'status-modal' && e.target.closest('.status-option')) {
-                const selectedOption = e.target.closest('.status-option');
-                const targetElement = document.querySelector(modal.dataset.targetElement);
-                if (!targetElement) return;
+    const selectedOption = e.target.closest('.status-option');
+    const targetElement = document.querySelector(modal.dataset.targetElement);
+    if (!targetElement) return;
 
-                const taskId = targetElement.closest('[data-task-id]').dataset.taskId;
-                const newStatus = selectedOption.dataset.statusValue;
-                onStatusChange(taskId, newStatus);
-                
-                modal.classList.remove('active');
-                document.body.classList.remove('overflow-hidden');
-            }
+    const taskId = targetElement.closest('[data-task-id]').dataset.taskId;
+    const newStatus = selectedOption.dataset.statusValue;
+    onStatusChange(taskId, newStatus);
+
+    modal.classList.remove('active');
+    document.body.classList.remove('overflow-hidden');
+}
+            
             if (e.target.closest('.modal-select-btn') && modal.id !== 'add-task-modal') {
                 const targetElement = document.querySelector(modal.dataset.targetElement);
                 if (!targetElement) return;

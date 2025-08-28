@@ -22,15 +22,15 @@ document.addEventListener('DOMContentLoaded', () => {
         const detailsContainer = taskCard.querySelector('.task-details');
         
         // Принудительно "захлопываем" карточку перед открытием модального окна
+        if (detailsContainer) {
             detailsContainer.classList.remove('expanded');
             detailsContainer.innerHTML = '';
-
-        // Рендерим детали, если их нет, чтобы модальное окно могло получить ID
-        if (!detailsContainer.innerHTML) {
-            const appData = store.getAppData();
-            render.renderTaskDetails(detailsContainer, appData.userRole);
         }
-        modals.openStatusModal(detailsContainer);
+        
+        // Получаем ID задачи напрямую из карточки, а не из несуществующей переменной
+        const taskId = taskCard.dataset.taskId;
+        modals.openStatusModal(taskId);
+
         return;
     }
 

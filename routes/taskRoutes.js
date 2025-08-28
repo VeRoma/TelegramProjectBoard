@@ -33,7 +33,6 @@ router.post('/appdata', async (req, res) => {
             tasksToProcess = allTasks.filter(task => {
                 const mainAssigneeId = task.get(TASK_COLUMNS.USER_ID);
                 if (mainAssigneeId == currentInternalUserId) return true;
-
                 const taskId = task.get(TASK_COLUMNS.TASK_ID);
                 return allMembers.some(m => m.taskId === taskId && m.userId === currentInternalUserId);
             });
@@ -45,14 +44,11 @@ router.post('/appdata', async (req, res) => {
             const projectId = task.get(TASK_COLUMNS.PROJECT_ID) || '1';
             const statusId = task.get(TASK_COLUMNS.STATUS_ID) || '1';
             const priority = parseInt(task.get(TASK_COLUMNS.PRIORITY), 10) || 1;
-
             const project = allProjects.find(p => p.projectId == projectId);
             const status = allStatuses.find(s => s.statusId == statusId);
-            
             const taskId = task.get(TASK_COLUMNS.TASK_ID);
             const memberUserIds = allMembers.filter(m => m.taskId === taskId).map(m => m.userId);
             const mainAssigneeId = task.get(TASK_COLUMNS.USER_ID);
-            
             const responsibleIds = new Set([mainAssigneeId, ...memberUserIds].filter(Boolean));
             const responsibleNames = [...responsibleIds].map(id => allUsers.find(u => u.userId === id)?.name).filter(Boolean);
 
@@ -63,6 +59,7 @@ router.post('/appdata', async (req, res) => {
                 statusId: statusId,
                 responsible: responsibleNames.join(', '),
                 project: project ? project.projectName : 'Без проекта',
+                projectId: projectId,
                 priority: priority,
                 version: parseInt(task.get(TASK_COLUMNS.VERSION) || 0, 10)
             };
@@ -77,6 +74,7 @@ router.post('/appdata', async (req, res) => {
             groups[groupName].tasks.push(task);
         });
         
+        console.log('[SERVER LOG] Sending initial app data to user:', userName);
         res.status(200).json({ 
             projects: Object.values(groups),
             allProjects: allProjects, 
@@ -87,27 +85,27 @@ router.post('/appdata', async (req, res) => {
         });
 
     } catch (error) {
-        console.error('Error in /api/appdata:', error);
+        console.error('[SERVER ERROR] in /api/appdata:', error);
         res.status(500).json({ error: error.message });
     }
 });
 
 router.post('/updatepriorities', async (req, res) => {
     try {
-        const { tasks } = req.body;
+        const { tasks, modifierName } = req.body;
+        console.log(`[SERVER LOG] Received /updatepriorities request from ${modifierName}. Tasks to update:`, tasks);
 
         if (!tasks || !Array.isArray(tasks) || tasks.length === 0) {
+            console.error('[SERVER ERROR] Invalid tasks data provided.');
             return res.status(400).json({ error: 'Invalid tasks data provided.' });
         }
         
-        // Клиент уже присылает готовые данные (taskId, statusId, priority),
-        // поэтому просто передаем их дальше.
         await googleSheetsService.updateTaskPrioritiesInSheet(tasks);
-
+        console.log('[SERVER LOG] Priorities updated successfully in Google Sheets.');
         res.status(200).json({ status: 'success', message: 'Priorities updated successfully.' });
 
     } catch (error) {
-        console.error('Error in /api/updatepriorities:', error);
+        console.error('[SERVER ERROR] in /api/updatepriorities:', error);
         res.status(500).json({ error: error.message });
     }
 });

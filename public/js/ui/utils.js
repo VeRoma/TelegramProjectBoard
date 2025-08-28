@@ -45,22 +45,22 @@ export function showDataLoadError(error) {
 }
 
 export function updateFabButtonUI(isEditMode, saveHandler, addHandler) {
-    // Безопасно удаляем старый обработчик, чтобы избежать дублирования
-    if (fabButton.onclick) {
-        fabButton.removeEventListener('click', fabButton.onclick);
+    // Корректно удаляем предыдущий обработчик, чтобы избежать утечек памяти и двойных срабатываний
+    if (currentFabClickHandler) {
+        fabButton.removeEventListener('click', currentFabClickHandler);
     }
     
     if (isEditMode) {
         // Настраиваем кнопку для режима "Сохранить"
         fabIconContainer.innerHTML = ICONS.save;
-        fabButton.onclick = saveHandler;
+        currentFabClickHandler = saveHandler;
     } else {
-        // --- ВОССТАНОВЛЕННАЯ ЛОГИКА ---
         // Настраиваем кнопку для обычного режима "Добавить"
         fabIconContainer.innerHTML = ICONS.add;
-        fabButton.onclick = addHandler;
-        // ---------------------------------
+        currentFabClickHandler = addHandler;
     }
+    // Привязываем новый актуальный обработчик
+    fabButton.addEventListener('click', currentFabClickHandler);
 }
 
 export function showAccessDeniedScreen() {
@@ -183,14 +183,6 @@ export function showMessage(message, type = 'info') {
     }
 }
 
-/**
- * Получает текущее состояние (свернут/развернут) всех проектов на странице.
- * @returns {Object} Объект, где ключ - название проекта, значение - true (развернут) или false (свернут).
- */
-/**
- * Получает текущее состояние (свернут/развернут) всех проектов на странице.
- * @returns {Object} Объект, где ключ - название проекта, значение - true (развернут) или false (свернут).
- */
 /**
  * Получает текущее состояние (свернут/развернут) всех проектов на странице.
  * @returns {Object} Объект, где ключ - название проекта, значение - true (развернут) или false (свернут).
