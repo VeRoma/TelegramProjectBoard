@@ -7,7 +7,49 @@ import * as store from './store.js';
 export async function handleSaveActiveTask() {
     const activeEditElement = document.querySelector('.task-details.edit-mode');
     if (!activeEditElement) return;
-    uiUtils.showMessage('Функция редактирования в разработке.', 'info');
+
+    const appData = store.getAppData();
+    const responsibleText = activeEditElement.querySelector('.task-responsible-view').textContent;
+    const selectedEmployees = responsibleText ? responsibleText.split(',').map(s => s.trim()).filter(Boolean) : [];
+    
+    const taskId = activeEditElement.closest('[data-task-id]').dataset.taskId;
+    const { task: taskInAppData } = store.findTask(taskId);
+
+    if (!taskInAppData) {
+        uiUtils.showMessage('Не удалось найти исходную задачу для сохранения.', 'error');
+        return;
+    }
+
+    const updatedTask = {
+        ...taskInAppData,
+        name: activeEditElement.querySelector('.task-name-edit').value,
+        status: activeEditElement.querySelector('.task-status-view').textContent,
+        project: activeEditElement.querySelector('.task-project-view').textContent,
+        responsible: selectedEmployees,
+        version: parseInt(activeEditElement.dataset.version, 10),
+    };
+
+    try {
+        const result = await api.saveTask({ taskData: updatedTask, modifierName: appData.userName });
+        if (result.status === 'success') {
+            uiUtils.showMessage('Изменения сохранены', 'success');
+            Object.assign(taskInAppData, updatedTask, { version: result.newVersion });
+            
+            activeEditElement.dataset.task = JSON.stringify(taskInAppData).replace(/'/g, '&apos;');
+            activeEditElement.dataset.version = result.newVersion;
+
+            uiUtils.exitEditMode(activeEditElement);
+            uiUtils.updateFabButtonUI(false, null, handleShowAddTaskModal);
+            
+            const accordionState = uiUtils.getAccordionState();
+            render.renderProjects(appData.projects, appData.userName, appData.userRole, accordionState);
+
+        } else {
+             uiUtils.showMessage('Ошибка сохранения: ' + (result.error || 'Неизвестная ошибка'), 'error');
+        }
+    } catch (error) {
+        uiUtils.showMessage('Критическая ошибка сохранения: ' + error.message, 'error');
+    }
 }
 
 export function handleShowAddTaskModal() {
@@ -17,24 +59,59 @@ export function handleShowAddTaskModal() {
 }
 
 export async function handleCreateTask(taskData) {
-    // ... (код этой функции остается без изменений)
+    const appData = store.getAppData();
+    const isLimitedView = !['owner', 'admin'].includes(appData.userRole);
+
+    const allTasksForScope = isLimitedView
+        ? appData.projects.flatMap(p => p.tasks)
+        : (appData.projects.find(p => p.name === taskData.project) || { tasks: [] }).tasks;
+
+    const tasksInGroup = allTasksForScope.filter(t => t.status === taskData.status);
+    const maxPriority = Math.max(0, ...tasksInGroup.map(t => t.priority));
+    taskData.priority = maxPriority + 1;
+    
+    const tempTaskId = `temp_${Date.now()}`;
+    const optimisticTask = { ...taskData, taskId: tempTaskId, version: 0 };
+    let targetProject = appData.projects.find(p => p.name === optimisticTask.project);
+    if (!targetProject) {
+        targetProject = { name: optimisticTask.project, tasks: [] };
+        appData.projects.push(targetProject);
+    }
+    targetProject.tasks.push(optimisticTask);
+    modals.closeAddTaskModal();
+    
+    const accordionStateBefore = uiUtils.getAccordionState();
+    render.renderProjects(appData.projects, appData.userName, appData.userRole, accordionStateBefore);
+    uiUtils.showMessage('Задача добавлена, идет сохранение...', 'info');
+    
+    try {
+        const result = await api.addTask({ newTaskData: taskData, creatorName: appData.userName });
+        if (result.status === 'success' && result.tasks && result.tasks.length > 0) {
+            const finalTask = result.tasks[0];
+            const taskToUpdate = targetProject.tasks.find(t => t.taskId === tempTaskId);
+            if (taskToUpdate) Object.assign(taskToUpdate, finalTask);
+            
+            const accordionStateAfter = uiUtils.getAccordionState();
+            render.renderProjects(appData.projects, appData.userName, appData.userRole, accordionStateAfter);
+            uiUtils.showMessage('Задача успешно сохранена', 'success');
+
+        } else {
+            throw new Error(result.error || 'Неизвестная ошибка сервера');
+        }
+    } catch (error) {
+        uiUtils.showMessage(`Не удалось сохранить задачу: ${error.message}. Обновляем список...`, 'error');
+        setTimeout(() => window.location.reload(), 3000);
+    }
 }
 
 export async function handleStatusUpdate(taskId, newStatusName) {
-    // Защита от неопределенного ID задачи. Ошибка возникает в вызывающем коде (вероятно, modals.js).
-    // Проверяем на undefined, null, и строку "undefined", чтобы перехватить некорректные данные из modals.js
-    if (!taskId || taskId === 'undefined') {
-        console.error("[CLIENT ERROR] handleStatusUpdate вызвана с неверным ID задачи. Полученный ID:", taskId, ". Вероятная ошибка в логике модального окна (modals.js).");
-        uiUtils.showMessage('Произошла внутренняя ошибка (ID задачи не найден).', 'error');
-        return;
-    }
-
-    console.log(`[CLIENT LOG] handleStatusUpdate called. Task ID: ${taskId}, New Status: ${newStatusName}`);
-    
+    console.log(`[HANDLERS.JS LOG] handleStatusUpdate received: taskId=${taskId}, newStatusName=${newStatusName}`);
+   
     const appData = store.getAppData();
     const { task, project } = store.findTask(taskId);
     if (!task || !project) {
-        console.error("[CLIENT ERROR] Task not found in store for ID:", taskId);
+        console.error("[HANDLERS.JS ERROR] Task not found in store for ID:", taskId);
+        
         return;
     }
     
@@ -46,10 +123,6 @@ export async function handleStatusUpdate(taskId, newStatusName) {
         ? appData.projects.flatMap(p => p.tasks)
         : project.tasks;
     
-    const tasksInOldGroup = allTasksForScope.filter(t => t.status === oldStatus && t.taskId !== task.taskId);
-    // Сохраняем старые приоритеты для возможного отката
-    const oldGroupPriorities = new Map(tasksInOldGroup.map(t => [t.taskId, t.priority]));
-
     task.status = newStatusName;
     
     if (newStatusName === 'Выполнено') {
@@ -59,6 +132,7 @@ export async function handleStatusUpdate(taskId, newStatusName) {
         const maxPriority = Math.max(0, ...tasksInNewGroup.map(t => t.priority));
         task.priority = maxPriority + 1;
     }
+    const tasksInOldGroup = allTasksForScope.filter(t => t.status === oldStatus && t.taskId !== task.taskId);
     tasksInOldGroup.sort((a, b) => a.priority - b.priority).forEach((t, index) => {
         t.priority = index + 1;
     });
@@ -67,30 +141,36 @@ export async function handleStatusUpdate(taskId, newStatusName) {
     render.renderProjects(appData.projects, appData.userName, appData.userRole, accordionState);
     uiUtils.showMessage('Статус обновлён, идет сохранение...', 'info');
     
-    // Создаем Map для быстрого поиска ID статуса по имени (O(1) вместо O(n))
-    const statusMap = new Map(store.getAllStatuses().map(s => [s.name, s.statusId]));
+    const statuses = store.getAllStatuses();
 
     const tasksToUpdate = [...tasksInOldGroup, task].map(t => {
+        const statusId = (statuses.find(s => s.name === t.status) || {}).statusId;
         return {
             taskId: t.taskId,
             priority: t.priority,
-            statusId: statusMap.get(t.status)
+            statusId: statusId
         };
     });
 
-    const rollbackAction = () => {
+    try {
+        console.log('[HANDLERS.JS LOG] Preparing to send to /updatepriorities:', tasksToUpdate);
+        
+        const result = await api.updatePriorities({ tasks: tasksToUpdate, modifierName: appData.userName });
+        if (result.status !== 'success') throw new Error(result.error || 'Ошибка сохранения');
+        uiUtils.showMessage('Сохранение завершено', 'success');
+    } catch (error) {
+        console.error('[HANDLERS.JS ERROR] Failed to update priorities:', error);
+        
+        uiUtils.showMessage('Не удалось сохранить изменения: ' + error.message, 'error');
         task.status = oldStatus;
         task.priority = oldPriority;
-        tasksInOldGroup.forEach(t => {
-            // Восстанавливаем приоритеты для всех затронутых задач в старой группе
-            t.priority = oldGroupPriorities.get(t.taskId);
-        });
-    };
-
-    await savePrioritiesWithRollback(tasksToUpdate, appData.userName, rollbackAction);
+        setTimeout(() => window.location.reload(), 2000);
+    }
 }
 
-export async function handleDragDrop(groupName, updatedTaskIdsInGroup, userRole) {
+export function handleDragDrop(groupName, updatedTaskIdsInGroup, userRole) {
+    console.log(`[HANDLERS.JS LOG] handleDragDrop received: groupName=${groupName}, new order=`, updatedTaskIdsInGroup);
+    
     const appData = store.getAppData();
     let tasksForScope;
 
@@ -100,20 +180,17 @@ export async function handleDragDrop(groupName, updatedTaskIdsInGroup, userRole)
     } else {
         const projectData = appData.projects.find(p => p.name === groupName);
         if (!projectData) {
-            console.error(`[CLIENT ERROR] Project "${groupName}" not found for drag-drop!`);
+            console.error(`[handleDragDrop] Проект "${groupName}" не найден!`);
             return;
         }
         tasksForScope = projectData.tasks;
     }
 
     const taskMap = new Map(tasksForScope.map(t => [t.taskId.toString(), t]));
-    // Сохраняем старые приоритеты для возможного отката
-    const oldPriorities = new Map(tasksForScope.map(t => [t.taskId.toString(), t.priority]));
 
     const tasksToUpdate = updatedTaskIdsInGroup.map((id, index) => {
         const task = taskMap.get(id);
         if (task) {
-            // Оптимистичное обновление приоритета в локальном состоянии
             task.priority = index + 1;
             return { taskId: task.taskId, priority: task.priority, statusId: task.statusId };
         }
@@ -121,51 +198,68 @@ export async function handleDragDrop(groupName, updatedTaskIdsInGroup, userRole)
     }).filter(Boolean);
     
     if (tasksToUpdate.length > 0) {
-        uiUtils.showMessage('Идет сохранение нового порядка задач...', 'info');
-
-        const rollbackAction = () => {
-            updatedTaskIdsInGroup.forEach(id => {
-                const task = taskMap.get(id);
-                if (task) {
-                    task.priority = oldPriorities.get(id);
-                }
-            });
-        };
-
-        await savePrioritiesWithRollback(tasksToUpdate, appData.userName, rollbackAction);
-    }
-}
-
-/**
- * Отправляет обновленные приоритеты на сервер и обрабатывает откат в случае ошибки.
- * @param {Array<Object>} tasksToUpdate - Массив задач для обновления.
- * @param {string} modifierName - Имя пользователя, вносящего изменения.
- * @param {Function} rollbackAction - Функция для отката изменений в локальном хранилище.
- */
-async function savePrioritiesWithRollback(tasksToUpdate, modifierName, rollbackAction) {
-    try {
-        console.log('[CLIENT LOG] Sending data to /updatepriorities:', tasksToUpdate);
-        const result = await api.updatePriorities({ tasks: tasksToUpdate, modifierName });
-        if (result.status !== 'success') {
-            throw new Error(result.error || 'Ошибка сохранения на сервере');
-        }
-        uiUtils.showMessage('Сохранение завершено', 'success');
-    } catch (error) {
-        console.error('[CLIENT ERROR] Failed to update priorities:', error);
-        uiUtils.showMessage('Не удалось сохранить изменения: ' + error.message, 'error');
+        console.log('[HANDLERS.JS LOG] Preparing to send to /updatepriorities after drag-drop:', tasksToUpdate);
         
-        // Выполняем откат
-        if (typeof rollbackAction === 'function') {
-            rollbackAction();
-        }
-
-        // Повторная отрисовка UI с восстановленным состоянием
-        const appData = store.getAppData();
-        const accordionState = uiUtils.getAccordionState();
-        render.renderProjects(appData.projects, appData.userName, appData.userRole, accordionState);
+        uiUtils.showMessage('Идет сохранение нового порядка задач...', 'info');
+        
+        api.updatePriorities({ tasks: tasksToUpdate, modifierName: appData.userName })
+            .then(result => {
+                if (result.status === 'success') {
+                    uiUtils.showMessage('Сохранение завершено', 'success');
+                } else {
+                    throw new Error(result.error || 'Неизвестная ошибка сервера');
+                }
+            })
+            .catch(error => {
+                uiUtils.showMessage('Не удалось сохранить новый порядок задач: ' + error.message, 'error');
+                setTimeout(() => window.location.reload(), 3000);
+            });
     }
 }
 
 export function handleSaveNewTaskClick() {
-    // ... (код этой функции остается без изменений)
+    const appData = store.getAppData();
+    
+    const taskName = document.getElementById('new-task-name')?.value;
+    const projectName = document.getElementById('new-task-project')?.value;
+    const activeStatusElement = document.querySelector('#new-task-status-toggle .toggle-option.active');
+    const statusName = activeStatusElement ? activeStatusElement.dataset.status : 'К выполнению';
+
+    const isLimitedView = !['owner', 'admin'].includes(appData.userRole);
+    let responsibleNames = [];
+    if (isLimitedView) {
+        responsibleNames = [appData.userName];
+    } else {
+        const responsibleCheckboxes = document.querySelectorAll('#add-task-modal .employee-checkbox:checked');
+        responsibleNames = [...responsibleCheckboxes].map(cb => cb.value);
+    }
+
+    if (!taskName || !projectName || (!isLimitedView && responsibleNames.length === 0)) {
+        return uiUtils.showMessage('Пожалуйста, заполните поля: Наименование, Проект и Ответственный.', 'error');
+    }
+
+    const allEmployees = store.getAllEmployees();
+    const responsibleUsers = allEmployees.filter(emp => responsibleNames.includes(emp.name));
+    const responsibleUserIds = responsibleUsers.map(emp => emp.userId);
+    
+    const statuses = store.getAllStatuses();
+    const statusId = (statuses.find(s => s.name === statusName) || {}).statusId;
+
+    const projects = store.getAllProjects();
+    const project = projects.find(p => p.projectName === projectName);
+    const projectId = project ? project.projectId : null;
+    
+    const currentUser = allEmployees.find(u => u.name === appData.userName);
+    const creatorId = currentUser ? currentUser.userId : null;
+
+    handleCreateTask({
+        name: taskName,
+        project: projectName,
+        projectId: projectId,
+        status: statusName,
+        statusId: statusId,
+        responsible: responsibleNames.join(', '),
+        creatorId: creatorId,
+        responsibleUserIds: responsibleUserIds
+    });
 }

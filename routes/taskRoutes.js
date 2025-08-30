@@ -40,15 +40,21 @@ router.post('/appdata', async (req, res) => {
 
         const validTasks = tasksToProcess.filter(row => row.get(TASK_COLUMNS.NAME));
         
+        
+    
+
         const enrichedTasks = validTasks.map(task => {
             const projectId = task.get(TASK_COLUMNS.PROJECT_ID) || '1';
             const statusId = task.get(TASK_COLUMNS.STATUS_ID) || '1';
             const priority = parseInt(task.get(TASK_COLUMNS.PRIORITY), 10) || 1;
+
             const project = allProjects.find(p => p.projectId == projectId);
             const status = allStatuses.find(s => s.statusId == statusId);
+            
             const taskId = task.get(TASK_COLUMNS.TASK_ID);
             const memberUserIds = allMembers.filter(m => m.taskId === taskId).map(m => m.userId);
             const mainAssigneeId = task.get(TASK_COLUMNS.USER_ID);
+            
             const responsibleIds = new Set([mainAssigneeId, ...memberUserIds].filter(Boolean));
             const responsibleNames = [...responsibleIds].map(id => allUsers.find(u => u.userId === id)?.name).filter(Boolean);
 
@@ -65,6 +71,8 @@ router.post('/appdata', async (req, res) => {
             };
         });
 
+        console.log(`[SERVER LOG] Sending initial app data to user: ${userName}. Task count: ${enrichedTasks.length}`);
+
         const groups = {};
         enrichedTasks.forEach(task => {
             const groupName = task.project;
@@ -74,7 +82,6 @@ router.post('/appdata', async (req, res) => {
             groups[groupName].tasks.push(task);
         });
         
-        console.log('[SERVER LOG] Sending initial app data to user:', userName);
         res.status(200).json({ 
             projects: Object.values(groups),
             allProjects: allProjects, 
@@ -92,16 +99,23 @@ router.post('/appdata', async (req, res) => {
 
 router.post('/updatepriorities', async (req, res) => {
     try {
-        const { tasks, modifierName } = req.body;
-        console.log(`[SERVER LOG] Received /updatepriorities request from ${modifierName}. Tasks to update:`, tasks);
+        const { tasks } = req.body;
+
+        console.log(`[SERVER LOG] Received /updatepriorities request from ${modifierName}.`);
+        console.log('[SERVER LOG] Request body:', JSON.stringify(tasks, null, 2));
+
 
         if (!tasks || !Array.isArray(tasks) || tasks.length === 0) {
             console.error('[SERVER ERROR] Invalid tasks data provided.');
+            
             return res.status(400).json({ error: 'Invalid tasks data provided.' });
         }
         
         await googleSheetsService.updateTaskPrioritiesInSheet(tasks);
+
         console.log('[SERVER LOG] Priorities updated successfully in Google Sheets.');
+        
+
         res.status(200).json({ status: 'success', message: 'Priorities updated successfully.' });
 
     } catch (error) {
@@ -110,8 +124,32 @@ router.post('/updatepriorities', async (req, res) => {
     }
 });
 
-// Заглушки для будущего функционала
-router.post('/updatetask', async (req, res) => res.status(501).json({ error: 'Not implemented yet' }));
-router.post('/addtask', async (req, res) => res.status(501).json({ error: 'Not implemented yet' }));
+router.post('/addtask', async (req, res) => {
+    try {
+        const { newTaskData, creatorName } = req.body;
+        if (!newTaskData) {
+            return res.status(400).json({ error: 'New task data is required.' });
+        }
+        const addedRows = await googleSheetsService.addTaskToSheet(newTaskData, creatorName);
+        
+        // Преобразуем ответ в тот же формат, что и при загрузке
+        const createdTaskData = addedRows[0].toObject();
+        const createdTask = {
+            taskId: createdTaskData[TASK_COLUMNS.TASK_ID],
+            name: createdTaskData[TASK_COLUMNS.NAME],
+            // здесь можно добавить "обогащение" задачи, если нужно
+        };
+
+        res.status(201).json({ status: 'success', tasks: [createdTask] });
+    } catch (error) {
+        console.error('[SERVER ERROR] in /api/addtask:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+router.post('/updatetask', async (req, res) => {
+    // Эта функция пока остается заглушкой, но готова к реализации
+    res.status(501).json({ error: 'Not implemented yet' });
+});
 
 module.exports = router;

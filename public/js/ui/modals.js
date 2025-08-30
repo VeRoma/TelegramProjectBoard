@@ -7,14 +7,13 @@ const employeeModal = document.getElementById('employee-modal');
 const projectModal = document.getElementById('project-modal');
 const addTaskModal = document.getElementById('add-task-modal');
 
-// Флаг, чтобы контент модального окна статусов генерировался только один раз
 let statusModalContentLoaded = false;
 
-export function openStatusModal(taskId) { // <--- ИЗМЕНЕНИЕ: принимаем taskId
+export function openStatusModal(taskId) {
+    console.log(`[MODALS.JS LOG] openStatusModal received taskId: ${taskId}`);
     uiUtils.collapseAllTaskDetails();
     document.body.classList.add('overflow-hidden');
     
-    // Генерируем контент только при первом открытии для повышения производительности
     if (!statusModalContentLoaded) {
         const statuses = store.getAllStatuses();
         statuses.sort((a, b) => a.order - b.order);
@@ -40,11 +39,10 @@ export function openStatusModal(taskId) { // <--- ИЗМЕНЕНИЕ: прини
 export function openEmployeeModal(activeTaskDetailsElement, allEmployees, userRole) {
     document.body.classList.add('overflow-hidden');
     const currentResponsibleText = activeTaskDetailsElement.querySelector('.task-responsible-view').textContent;
-    
     const isLimitedView = !['owner', 'admin'].includes(userRole);
 
-    if (!isLimitedView) {
-        employeeModal.innerHTML = `
+    if (isLimitedView) {
+         employeeModal.innerHTML = `
             <div class="modal-content">
                 <div class="p-4 border-b" style="border-color: var(--tg-theme-hint-color);">
                     <h3 class="text-lg font-bold">Ответственные</h3>
@@ -56,7 +54,6 @@ export function openEmployeeModal(activeTaskDetailsElement, allEmployees, userRo
     } else {
         const currentResponsible = currentResponsibleText.split(',').map(n => n.trim());
         const employeesCheckboxes = allEmployees.map(e => `<label class="flex items-center space-x-3 p-3 rounded-md hover:bg-gray-200"><input type="checkbox" value="${e.name}" ${currentResponsible.includes(e.name) ? 'checked' : ''} class="employee-checkbox w-4 h-4 rounded"><span>${e.name}</span></label>`).join('');
-        
         employeeModal.innerHTML = `
             <div class="modal-content">
                 <div class="p-4 border-b" style="border-color: var(--tg-theme-hint-color);">
@@ -68,7 +65,6 @@ export function openEmployeeModal(activeTaskDetailsElement, allEmployees, userRo
                 </div>
             </div>`;
     }
-
     employeeModal.classList.add('active');
     employeeModal.dataset.targetElement = `#${activeTaskDetailsElement.id}`;
 }
@@ -89,7 +85,7 @@ export function openAddTaskModal(allProjects, allEmployees, userRole, userName) 
     let responsibleHtml = '';
     const isLimitedView = !['owner', 'admin'].includes(userRole);
     if (!isLimitedView) {
-        responsibleHtml = ''; // Для ограниченных ролей блока выбора нет
+        responsibleHtml = '';
     } else {  
         const employeesCheckboxes = allEmployees.map(e => `<label class="flex items-center space-x-3 p-3 rounded-md hover:bg-gray-200"><input type="checkbox" value="${e.name}" class="employee-checkbox w-4 h-4 rounded"><span>${e.name}</span></label>`).join('');
         responsibleHtml = `
@@ -171,17 +167,17 @@ export function setupModals(onStatusChange) {
             }
 
             if (modal.id === 'status-modal' && e.target.closest('.status-option')) {
-    const selectedOption = e.target.closest('.status-option');
-    const targetElement = document.querySelector(modal.dataset.targetElement);
-    if (!targetElement) return;
+                const selectedOption = e.target.closest('.status-option');
+                
+                const taskId = modal.dataset.currentTaskId;
+                console.log(`[MODALS.JS LOG] Extracted taskId from modal dataset: ${taskId}`);
+                
+                const newStatus = selectedOption.dataset.statusValue;
+                onStatusChange(taskId, newStatus);
 
-    const taskId = targetElement.closest('[data-task-id]').dataset.taskId;
-    const newStatus = selectedOption.dataset.statusValue;
-    onStatusChange(taskId, newStatus);
-
-    modal.classList.remove('active');
-    document.body.classList.remove('overflow-hidden');
-}
+                modal.classList.remove('active');
+                document.body.classList.remove('overflow-hidden');
+            }
             
             if (e.target.closest('.modal-select-btn') && modal.id !== 'add-task-modal') {
                 const targetElement = document.querySelector(modal.dataset.targetElement);
