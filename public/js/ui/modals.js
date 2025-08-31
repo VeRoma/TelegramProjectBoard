@@ -74,9 +74,10 @@ export function openStatusModal(taskId) {
 }
 
 export async function openEmployeeModal(activeTaskDetailsElement, allEmployees, userRole) {
-    document.body.classList.add('overflow-hidden');
-    const isLimitedView = !['owner', 'admin'].includes(userRole);
+    const taskData = JSON.parse(activeTaskDetailsElement.dataset.task);
+    const projectId = taskData.projectId;
     const currentResponsibleText = activeTaskDetailsElement.querySelector('.task-responsible-view').textContent;
+    const isLimitedView = !['owner', 'admin'].includes(userRole);
 
     if (isLimitedView) {
          employeeModal.innerHTML = `
@@ -89,9 +90,6 @@ export async function openEmployeeModal(activeTaskDetailsElement, allEmployees, 
                 </div>
             </div>`;
     } else {
-        const taskData = JSON.parse(activeTaskDetailsElement.dataset.task);
-        const projectId = taskData.projectId;
-
         let employeesToShow = [];
         try {
             const memberIds = await api.getProjectMembers(projectId);
@@ -129,23 +127,27 @@ export async function openEmployeeModal(activeTaskDetailsElement, allEmployees, 
 }
 
 export function openProjectModal(activeTaskDetailsElement, allProjects) {
-    document.body.classList.add('overflow-hidden');
     const currentProject = activeTaskDetailsElement.querySelector('.task-project-view').textContent;
     projectModal.innerHTML = `<div class="modal-content"><div class="p-4 border-b" style="border-color: var(--tg-theme-hint-color);"><h3 class="text-lg font-bold">Выберите проект</h3></div><div class="modal-body">${allProjects.map(p => `<label class="flex items-center space-x-3 p-3 rounded-md hover:bg-gray-200"><input type="radio" name="project" value="${p.projectName}" ${p.projectName === currentProject ? 'checked' : ''} class="w-4 h-4"><span>${p.projectName}</span></label>`).join('')}</div><div class="p-2 border-t flex justify-end" style="border-color: var(--tg-theme-hint-color);"><button class="modal-select-btn px-4 py-2 rounded-lg">Выбрать</button></div></div>`;
     projectModal.classList.add('active');
     projectModal.dataset.targetElementId = activeTaskDetailsElement.id;
 }
 
+// В файле public/js/ui/modals.js
+
 export function openAddTaskModal(allProjects, allEmployees, userRole, userName) {
     document.body.classList.add('overflow-hidden');
     const tg = window.Telegram.WebApp;
-
     const projectsOptions = allProjects.map(p => `<option value="${p.projectId}">${p.projectName}</option>`).join('');
     
-    const statuses = store.getAllStatuses();
-    statuses.sort((a, b) => a.order - b.order);
-    const statusToggleHtml = statuses.map((status, index) => {
-        const isActive = index === 0 ? 'active' : '';
+    // Фильтруем статусы
+    const allStatuses = store.getAllStatuses();
+    const allowedStatusIds = new Set(['1', '5', '6']);
+    const filteredStatuses = allStatuses.filter(status => allowedStatusIds.has(status.statusId));
+    filteredStatuses.sort((a, b) => a.order - b.order);
+
+    const statusToggleHtml = filteredStatuses.map((status, index) => {
+        const isActive = index === 0 ? 'active' : ''; 
         return `
             <div class="toggle-option ${isActive}" data-status="${status.name}">
                 <span class="toggle-icon">${status.icon}</span>
@@ -153,7 +155,7 @@ export function openAddTaskModal(allProjects, allEmployees, userRole, userName) 
             </div>
         `;
     }).join('');
-
+    
     addTaskModal.innerHTML = `
         <div class="modal-content">
             <div class="p-4 border-b">
@@ -189,7 +191,7 @@ export function openAddTaskModal(allProjects, allEmployees, userRole, userName) 
                 </div>
             </div>
         </div>`;
-
+        
     const projectSelect = document.getElementById('new-task-project');
     const employeeContainer = document.getElementById('new-task-employees-list');
     const employeeSection = document.getElementById('new-task-employees-container');
@@ -214,30 +216,45 @@ export function openAddTaskModal(allProjects, allEmployees, userRole, userName) 
     };
 
     projectSelect.addEventListener('change', async (event) => {
+        // --- НАЧАЛО БЛОКА С ЛОГАМИ ---
+        console.log("--- DEBUG: Project selection changed ---");
         const projectId = event.target.value;
-        if (!projectId) {
-            renderEmployees([]);
-            stageSelect.innerHTML = '<option value="" disabled selected>Сначала выберите проект...</option>';
-            return;
-        }
-
+        console.log(`1. Selected Project ID: ${projectId}`);
+        
         try {
             const memberIds = await api.getProjectMembers(projectId);
             const memberIdsSet = new Set(memberIds);
             const projectMembers = allEmployees.filter(emp => memberIdsSet.has(emp.userId));
             renderEmployees(projectMembers);
         } catch (error) {
-            console.error('Failed to load project members:', error);
+            console.error('[DEBUG] Failed to load project members:', error);
             renderEmployees([]);
         }
 
-        const activeStageIds = new Set((store.getStageFilters()[projectId] || []).map(String));
+        const allStageFilters = store.getStageFilters();
+        console.log('2. All stored stage filters:', allStageFilters);
+
+        const activeStageIdsForProject = allStageFilters[projectId] || [];
+        console.log(`3. Active Stage IDs for this project (from store):`, activeStageIdsForProject);
+
         const allStages = store.getAppData().allStages || [];
-        const availableStages = allStages.filter(s => activeStageIds.has(String(s.stageId)));
-        
-        stageSelect.innerHTML = availableStages.map(stage => 
+        console.log('4. All available stages in the app:', allStages);
+
+        const activeStageIdsSet = new Set(activeStageIdsForProject.map(String));
+        const availableStages = allStages.filter(s => activeStageIdsSet.has(String(s.stageId)));
+        console.log('5. Filtered stages to show in dropdown:', availableStages);
+
+        const stageOptionsHtml = availableStages.map(stage => 
             `<option value="${stage.stageId}">${stage.name}</option>`
         ).join('');
+        console.log('6. Final HTML for stages dropdown:', stageOptionsHtml);
+        
+        stageSelect.innerHTML = stageOptionsHtml;
+        if(availableStages.length === 0) {
+            stageSelect.innerHTML = '<option value="" disabled selected>Нет активных этапов</option>';
+        }
+        console.log("--- DEBUG: End of handler ---");
+        // --- КОНЕЦ БЛОКА С ЛОГАМИ ---
     });
 
     if (statusToggle) {

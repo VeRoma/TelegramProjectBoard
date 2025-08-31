@@ -34,7 +34,6 @@ export async function handleSaveActiveTask() {
     const project = allProjects.find(p => p.projectName === projectName);
     const projectId = project ? project.projectId : null;
 
-    // --- ИЗМЕНЕНИЕ: Получаем stageId ---
     const stageName = activeEditElement.querySelector('.task-stage-view').textContent;
     const allStages = store.getAppData().allStages || [];
     const stage = allStages.find(s => s.name === stageName);
@@ -47,14 +46,13 @@ export async function handleSaveActiveTask() {
         statusId: statusId,
         project: projectName,
         projectId: projectId,
-        stageId: stageId, // <-- Добавлено
+        stageId: stageId,
         responsible: selectedEmployeeNames.join(', '),
         responsibleUserIds: responsibleUserIds,
         version: parseInt(activeEditElement.dataset.version, 10),
     };
 
     try {
-        // Предполагается, что saveTask на сервере умеет обрабатывать stageId
         const result = await api.saveTask({ taskData: updatedTask, modifierName: appData.userName });
         if (result.status === 'success') {
             uiUtils.showMessage('Изменения сохранены', 'success');
@@ -67,7 +65,6 @@ export async function handleSaveActiveTask() {
             uiUtils.updateFabButtonUI(false, null, handleShowAddTaskModal);
             
             const accordionState = uiUtils.getAccordionState();
-            // Передаем фильтры при перерисовке
             render.renderProjects(appData.projects, appData.userName, appData.userRole, accordionState, store.getStageFilters());
 
         } else {
@@ -87,7 +84,6 @@ export function handleShowAddTaskModal() {
 export async function handleCreateTask(taskData) {
     const appData = store.getAppData();
     const allProjects = store.getAppData().projects;
-    // Находим имя проекта по projectId
     const projectForTask = store.getAllProjects().find(p => p.projectId === taskData.projectId);
     const projectName = projectForTask ? projectForTask.projectName : '';
 
@@ -97,7 +93,6 @@ export async function handleCreateTask(taskData) {
     taskData.priority = maxPriority + 1;
     
     const tempTaskId = `temp_${Date.now()}`;
-    // Добавляем имя проекта в оптимистичный таск
     const optimisticTask = { ...taskData, taskId: tempTaskId, project: projectName, version: 0 };
     
     let targetProject = allProjects.find(p => p.name === optimisticTask.project);
@@ -166,7 +161,6 @@ export async function handleStatusUpdate(taskId, newStatusName) {
     });
 
     const accordionState = uiUtils.getAccordionState();
-    // Передаем фильтры при перерисовке
     render.renderProjects(appData.projects, appData.userName, appData.userRole, accordionState, store.getStageFilters());
     uiUtils.showMessage('Статус обновлён, идет сохранение...', 'info');
     
@@ -255,7 +249,6 @@ export function handleSaveNewTaskClick() {
         responsibleNames = [...responsibleCheckboxes].map(cb => cb.value);
     }
 
-    // --- ИЗМЕНЕНИЕ: Добавлена проверка на stageId ---
     if (!taskName || !projectId || !stageId || (!isLimitedView && responsibleNames.length === 0)) {
         return uiUtils.showMessage('Пожалуйста, заполните все поля: Наименование, Проект, Этап и Ответственный.', 'error');
     }
@@ -275,7 +268,7 @@ export function handleSaveNewTaskClick() {
         projectId: projectId,
         status: statusName,
         statusId: statusId,
-        stageId: stageId, // <-- Добавлено
+        stageId: stageId,
         responsible: responsibleNames.join(', '),
         creatorId: creatorId,
         responsibleUserIds: responsibleUserIds
@@ -299,7 +292,6 @@ export async function handleDeleteTask(taskId) {
             }
             
             const accordionState = uiUtils.getAccordionState();
-            // Передаем фильтры при перерисовке
             render.renderProjects(appData.projects, appData.userName, appData.userRole, accordionState, store.getStageFilters());
             uiUtils.showMessage('Задача успешно удалена', 'success');
         } else {

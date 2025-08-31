@@ -15,6 +15,7 @@ router.post('/appdata', async (req, res) => {
         // Загружаем все справочники один раз
         const allUsers = await googleSheetsService.getAllUsers();
         const allStatuses = await googleSheetsService.getAllStatuses();
+        const allStages = await googleSheetsService.getAllStages();
         let allProjects = await googleSheetsService.getAllProjects();
         let allTasks = await googleSheetsService.getTasks();
         // Загружаем активные фильтры по этапам
@@ -99,6 +100,7 @@ router.post('/appdata', async (req, res) => {
             userRole,
             allEmployees: allUsers,
             allStatuses: allStatuses,
+            allStages: allStages,
             activeProjectStages: activeProjectStages // Передаем фильтры клиенту
         });
 
