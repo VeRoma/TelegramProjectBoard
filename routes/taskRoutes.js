@@ -12,12 +12,12 @@ router.post('/appdata', async (req, res) => {
             return res.status(400).json({ error: ERROR_MESSAGES.USER_OBJECT_REQUIRED });
         }
 
+        // Загружаем все справочники один раз
         const allUsers = await googleSheetsService.getAllUsers();
-        const allProjects = await googleSheetsService.getAllProjects();
-        const allTasks = await googleSheetsService.getTasks();
-        const allMembers = await googleSheetsService.getAllMembers();
         const allStatuses = await googleSheetsService.getAllStatuses();
-
+        let allProjects = await googleSheetsService.getAllProjects();
+        let allTasks = await googleSheetsService.getTasks();
+        
         const currentUser = allUsers.find(u => u.tgUserId == user.id);
         if (!currentUser) {
             return res.status(200).json({ status: 'unregistered' });
@@ -25,24 +25,39 @@ router.post('/appdata', async (req, res) => {
 
         const { name: userName, role: userRole, userId: currentInternalUserId } = currentUser;
         
+        // --- НОВАЯ ЛОГИКА ФИЛЬТРАЦИИ ---
+        if (userRole !== 'admin' && userRole !== 'owner') {
+            // 1. Получаем ID проектов, в которых состоит пользователь
+            const userProjectIds = await googleSheetsService.getProjectIdsByUserId(currentInternalUserId);
+
+            // 2. Фильтруем проекты
+            allProjects = allProjects.filter(p => userProjectIds.includes(p.projectId));
+            
+            // 3. Фильтруем задачи, оставляя только те, что принадлежат доступным проектам
+            const userProjectIdsSet = new Set(userProjectIds);
+            allTasks = allTasks.filter(task => userProjectIdsSet.has(task.get(TASK_COLUMNS.PROJECT_ID)));
+        }
+        // --- КОНЕЦ НОВОЙ ЛОГИКИ ---
+
+        // Остальная часть кода остается почти без изменений
+        const allMembers = await googleSheetsService.getAllMembers();
         let tasksToProcess = [];
 
+        // Логика определения видимых задач (для админа/овнера - все, для юзера - только его)
         if (userRole === 'admin' || userRole === 'owner') {
             tasksToProcess = allTasks;
         } else {
-            tasksToProcess = allTasks.filter(task => {
+             tasksToProcess = allTasks.filter(task => {
                 const mainAssigneeId = task.get(TASK_COLUMNS.USER_ID);
                 if (mainAssigneeId == currentInternalUserId) return true;
                 const taskId = task.get(TASK_COLUMNS.TASK_ID);
-                return allMembers.some(m => m.taskId === taskId && m.userId === currentInternalUserId);
+                const taskMembers = allMembers.filter(m => m.taskId === taskId).map(m => m.userId);
+                return taskMembers.includes(currentInternalUserId);
             });
         }
 
         const validTasks = tasksToProcess.filter(row => row.get(TASK_COLUMNS.NAME));
         
-        
-    
-
         const enrichedTasks = validTasks.map(task => {
             const projectId = task.get(TASK_COLUMNS.PROJECT_ID) || '1';
             const statusId = task.get(TASK_COLUMNS.STATUS_ID) || '1';
@@ -71,11 +86,14 @@ router.post('/appdata', async (req, res) => {
             };
         });
 
-        console.log(`[SERVER LOG] Sending initial app data to user: ${userName}. Task count: ${enrichedTasks.length}`);
+        console.log(`[SERVER LOG] Sending initial app data to user: ${userName}. Project count: ${allProjects.length}. Task count: ${enrichedTasks.length}`);
 
         const groups = {};
         enrichedTasks.forEach(task => {
-            const groupName = task.project;
+            const project = allProjects.find(p => p.projectId === task.projectId);
+            if (!project) return; // Если задача относится к отфильтрованному проекту, пропускаем
+
+            const groupName = project.projectName;
             if (!groups[groupName]) {
                 groups[groupName] = { name: groupName, tasks: [] };
             }
@@ -150,6 +168,56 @@ router.post('/addtask', async (req, res) => {
 router.post('/updatetask', async (req, res) => {
     // Эта функция пока остается заглушкой, но готова к реализации
     res.status(501).json({ error: 'Not implemented yet' });
+});
+
+router.post('/deletetask', async (req, res) => {
+    try {
+        const { taskId, modifierName } = req.body;
+        if (!taskId) {
+            return res.status(400).json({ error: 'Task ID is required.' });
+        }
+
+        console.log(`[SERVER LOG] Received /deletetask request for task ${taskId} from ${modifierName}.`);
+        
+        // Здесь мы будем вызывать новую функцию из googleSheetsService
+        await googleSheetsService.archiveTaskInSheet(taskId, modifierName);
+
+        res.status(200).json({ status: 'success', message: 'Task archived successfully.' });
+
+    } catch (error) {
+        console.error('[SERVER ERROR] in /api/deletetask:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+router.get('/project/:projectId/members', async (req, res) => {
+    try {
+        const { projectId } = req.params;
+        const memberIds = await googleSheetsService.getMemberIdsByProjectId(projectId);
+        res.status(200).json(memberIds);
+    } catch (error) {
+        console.error(`[SERVER ERROR] GET /api/project/members:`, error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// POST-маршрут для обновления участников
+router.post('/project/:projectId/members', async (req, res) => {
+    try {
+        const { projectId } = req.params;
+        const { memberIds, modifierName } = req.body;
+
+        if (!Array.isArray(memberIds)) {
+            return res.status(400).json({ error: 'memberIds should be an array.' });
+        }
+
+        await googleSheetsService.updateProjectMembersInSheet(projectId, memberIds, modifierName);
+        res.status(200).json({ status: 'success' });
+
+    } catch (error) {
+        console.error(`[SERVER ERROR] POST /api/project/members:`, error);
+        res.status(500).json({ error: error.message });
+    }
 });
 
 module.exports = router;

@@ -285,3 +285,83 @@ export function handleSaveNewTaskClick() {
         responsibleUserIds: responsibleUserIds
     });
 }
+
+export async function handleDeleteTask(taskId) {
+    // Простое, но эффективное подтверждение
+    if (!confirm('Вы уверены, что хотите удалить эту задачу?')) {
+        return;
+    }
+
+    const appData = store.getAppData();
+    try {
+        uiUtils.showMessage('Удаление задачи...', 'info');
+        const result = await api.deleteTask({ taskId: taskId, modifierName: appData.userName });
+
+        if (result.status === 'success') {
+            // Оптимистичное обновление интерфейса
+            // 1. Находим проект, в котором находится задача
+            const { project } = store.findTask(taskId);
+            if (project) {
+                // 2. Удаляем задачу из массива задач этого проекта
+                project.tasks = project.tasks.filter(t => t.taskId !== taskId);
+            }
+            
+            // 3. Перерисовываем всё
+            const accordionState = uiUtils.getAccordionState();
+            render.renderProjects(appData.projects, appData.userName, appData.userRole, accordionState);
+            uiUtils.showMessage('Задача успешно удалена', 'success');
+        } else {
+            throw new Error(result.error || 'Неизвестная ошибка сервера');
+        }
+    } catch (error) {
+        uiUtils.showMessage(`Не удалось удалить задачу: ${error.message}`, 'error');
+    }
+}
+
+export async function handleManageMembers(projectId, projectName) {
+    try {
+        uiUtils.showMessage('Загрузка участников...', 'info');
+        // Получаем всех пользователей из хранилища
+        const allUsers = store.getAllEmployees();
+        // Запрашиваем с сервера ID текущих участников проекта
+        const currentMemberIds = await api.getProjectMembers(projectId);
+        
+        // Открываем модальное окно с данными
+        modals.openManageMembersModal(projectName, allUsers, currentMemberIds);
+        
+        // Настраиваем кнопку "Сохранить"
+        const saveBtn = document.getElementById('save-members-btn');
+        // Удаляем старый обработчик, чтобы избежать дублирования
+        saveBtn.replaceWith(saveBtn.cloneNode(true));
+        document.getElementById('save-members-btn').addEventListener('click', () => {
+             handleSaveMembers(projectId);
+        });
+
+    } catch (error) {
+        uiUtils.showMessage(`Ошибка: ${error.message}`, 'error');
+    }
+}
+
+async function handleSaveMembers(projectId) {
+    const checkedBoxes = document.querySelectorAll('#members-modal-list .member-checkbox:checked');
+    const newMemberIds = Array.from(checkedBoxes).map(cb => cb.value);
+    
+    const appData = store.getAppData();
+    
+    try {
+        uiUtils.showMessage('Сохранение...', 'info');
+        const result = await api.updateProjectMembers(projectId, { 
+            memberIds: newMemberIds, 
+            modifierName: appData.userName 
+        });
+
+        if (result.status === 'success') {
+            document.getElementById('manage-members-modal').classList.remove('active');
+            uiUtils.showMessage('Список участников обновлен!', 'success');
+        } else {
+            throw new Error(result.error || 'Неизвестная ошибка сервера');
+        }
+    } catch (error) {
+         uiUtils.showMessage(`Ошибка сохранения: ${error.message}`, 'error');
+    }
+}

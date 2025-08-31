@@ -1,6 +1,7 @@
 import * as store from '../store.js';
 import * as uiUtils from './utils.js';
 import * as handlers from '../handlers.js';
+import * as api from '../api.js';
 
 const statusModal = document.getElementById('status-modal');
 const employeeModal = document.getElementById('employee-modal');
@@ -36,13 +37,13 @@ export function openStatusModal(taskId) {
     statusModal.dataset.currentTaskId = taskId; 
 }
 
-export function openEmployeeModal(activeTaskDetailsElement, allEmployees, userRole) {
+export async function openEmployeeModal(activeTaskDetailsElement, allEmployees, userRole) {
     document.body.classList.add('overflow-hidden');
-    const currentResponsibleText = activeTaskDetailsElement.querySelector('.task-responsible-view').textContent;
     const isLimitedView = !['owner', 'admin'].includes(userRole);
+    const currentResponsibleText = activeTaskDetailsElement.querySelector('.task-responsible-view').textContent;
 
     if (isLimitedView) {
-         employeeModal.innerHTML = `
+        employeeModal.innerHTML = `
             <div class="modal-content">
                 <div class="p-4 border-b" style="border-color: var(--tg-theme-hint-color);">
                     <h3 class="text-lg font-bold">Ответственные</h3>
@@ -52,8 +53,30 @@ export function openEmployeeModal(activeTaskDetailsElement, allEmployees, userRo
                 </div>
             </div>`;
     } else {
+        const taskData = JSON.parse(activeTaskDetailsElement.dataset.task);
+        const projectId = taskData.projectId;
+
+        let employeesToShow = [];
+        try {
+            const memberIds = await api.getProjectMembers(projectId);
+            const memberIdsSet = new Set(memberIds);
+            employeesToShow = allEmployees.filter(emp => memberIdsSet.has(emp.userId));
+        } catch (error) {
+            console.error('Failed to load project members for editing:', error);
+            uiUtils.showMessage('Ошибка загрузки участников проекта', 'error');
+            employeesToShow = allEmployees; // Fallback
+        }
+        
+        employeesToShow.sort((a, b) => a.name.localeCompare(b.name));
+
         const currentResponsible = currentResponsibleText.split(',').map(n => n.trim());
-        const employeesCheckboxes = allEmployees.map(e => `<label class="flex items-center space-x-3 p-3 rounded-md hover:bg-gray-200"><input type="checkbox" value="${e.name}" ${currentResponsible.includes(e.name) ? 'checked' : ''} class="employee-checkbox w-4 h-4 rounded"><span>${e.name}</span></label>`).join('');
+        const employeesCheckboxes = employeesToShow.map(e => `
+            <label class="flex items-center space-x-3 p-3 rounded-md hover:bg-gray-200">
+                <input type="checkbox" value="${e.name}" ${currentResponsible.includes(e.name) ? 'checked' : ''} class="employee-checkbox w-4 h-4 rounded">
+                <span>${e.name}</span>
+            </label>
+        `).join('');
+
         employeeModal.innerHTML = `
             <div class="modal-content">
                 <div class="p-4 border-b" style="border-color: var(--tg-theme-hint-color);">
@@ -80,25 +103,13 @@ export function openProjectModal(activeTaskDetailsElement, allProjects) {
 export function openAddTaskModal(allProjects, allEmployees, userRole, userName) {
     document.body.classList.add('overflow-hidden');
     const tg = window.Telegram.WebApp;
-    const projectsOptions = allProjects.map(p => `<option value="${p.projectName}">${p.projectName}</option>`).join('');
-    
-    let responsibleHtml = '';
-    const isLimitedView = !['owner', 'admin'].includes(userRole);
-    if (!isLimitedView) {
-        responsibleHtml = '';
-    } else {  
-        const employeesCheckboxes = allEmployees.map(e => `<label class="flex items-center space-x-3 p-3 rounded-md hover:bg-gray-200"><input type="checkbox" value="${e.name}" class="employee-checkbox w-4 h-4 rounded"><span>${e.name}</span></label>`).join('');
-        responsibleHtml = `
-            <div>
-                <label class="text-xs font-medium text-gray-500">Ответственные</label>
-                <div class="modal-body-employee mt-1 border rounded-md p-2">${employeesCheckboxes}</div>
-            </div>`;
-    }
 
+    const projectsOptions = allProjects.map(p => `<option value="${p.projectId}">${p.projectName}</option>`).join('');
+    
     const statuses = store.getAllStatuses();
     statuses.sort((a, b) => a.order - b.order);
     const statusToggleHtml = statuses.map((status, index) => {
-        const isActive = index === 0 ? 'active' : ''; 
+        const isActive = index === 0 ? 'active' : '';
         return `
             <div class="toggle-option ${isActive}" data-status="${status.name}">
                 <span class="toggle-icon">${status.icon}</span>
@@ -106,7 +117,8 @@ export function openAddTaskModal(allProjects, allEmployees, userRole, userName) 
             </div>
         `;
     }).join('');
-    
+
+    // Шаг 1: Создаем HTML-структуру модального окна
     addTaskModal.innerHTML = `
         <div class="modal-content">
             <div class="p-4 border-b">
@@ -117,19 +129,67 @@ export function openAddTaskModal(allProjects, allEmployees, userRole, userName) 
                     <label class="text-xs font-medium text-gray-500">Наименование</label>
                     <textarea id="new-task-name" rows="2" class="details-input mt-1" placeholder="Название задачи" required></textarea>
                 </div>
-                <div><label class="text-xs font-medium text-gray-500">Проект</label><select id="new-task-project" class="details-input mt-1" required><option value="" disabled selected>Выберите...</option>${projectsOptions}</select></div>
+                <div>
+                    <label class="text-xs font-medium text-gray-500">Проект</label>
+                    <select id="new-task-project" class="details-input mt-1" required>
+                        <option value="" disabled selected>Выберите проект...</option>
+                        ${projectsOptions}
+                    </select>
+                </div>
                 <div>
                     <label class="text-xs font-medium text-gray-500">Статус</label>
-                    <div id="new-task-status-toggle" class="status-toggle">
-                        ${statusToggleHtml} 
+                    <div id="new-task-status-toggle" class="status-toggle">${statusToggleHtml}</div>
+                </div>
+                <div id="new-task-employees-container" style="display: none;">
+                    <label class="text-xs font-medium text-gray-500">Ответственные</label>
+                    <div id="new-task-employees-list" class="modal-body-employee mt-1 border rounded-md p-2">
+                        <p class="text-sm text-gray-500">Сначала выберите проект</p>
                     </div>
                 </div>
-                ${responsibleHtml}
             </div>
         </div>`;
-    addTaskModal.classList.add('active');
 
+    // Шаг 2: Теперь, когда HTML в DOM, получаем элементы
+    const projectSelect = document.getElementById('new-task-project');
+    const employeeContainer = document.getElementById('new-task-employees-list');
+    const employeeSection = document.getElementById('new-task-employees-container');
     const statusToggle = document.getElementById('new-task-status-toggle');
+
+    if (userRole === 'admin' || userRole === 'owner') {
+        employeeSection.style.display = 'block';
+    }
+
+    const renderEmployees = (employees) => {
+        if (employees.length === 0) {
+            employeeContainer.innerHTML = `<p class="text-sm text-gray-500">Список пуст. Выберите проект или добавьте участников в него.</p>`;
+            return;
+        }
+        employeeContainer.innerHTML = employees.map(emp => `
+            <label class="flex items-center space-x-3 p-3 rounded-md hover:bg-gray-200">
+                <input type="checkbox" value="${emp.name}" class="employee-checkbox w-4 h-4 rounded">
+                <span>${emp.name}</span>
+            </label>
+        `).join('');
+    };
+
+    // Шаг 3: Добавляем динамический обработчик событий
+    projectSelect.addEventListener('change', async (event) => {
+        const projectId = event.target.value;
+        if (!projectId) {
+            renderEmployees([]);
+            return;
+        }
+        try {
+            const memberIds = await api.getProjectMembers(projectId);
+            const memberIdsSet = new Set(memberIds);
+            const projectMembers = allEmployees.filter(emp => memberIdsSet.has(emp.userId));
+            renderEmployees(projectMembers);
+        } catch (error) {
+            console.error('Failed to load project members:', error);
+            renderEmployees([]);
+        }
+    });
+
     if (statusToggle) {
         statusToggle.addEventListener('click', (e) => {
             const targetOption = e.target.closest('.toggle-option');
@@ -140,6 +200,7 @@ export function openAddTaskModal(allProjects, allEmployees, userRole, userName) 
         });
     }
 
+    addTaskModal.classList.add('active');
     tg.BackButton.onClick(closeAddTaskModal);
     tg.BackButton.show();
 }
@@ -194,4 +255,30 @@ export function setupModals(onStatusChange) {
             }
         });
     });
+}
+
+export function openManageMembersModal(projectName, allUsers, currentMemberIds) {
+    const modal = document.getElementById('manage-members-modal');
+    const listContainer = document.getElementById('members-modal-list');
+    const projectNameEl = document.getElementById('members-modal-project-name');
+
+    projectNameEl.textContent = projectName;
+    
+    // Сортируем пользователей по имени
+    allUsers.sort((a, b) => a.name.localeCompare(b.name));
+
+    let userHtml = '';
+    allUsers.forEach(user => {
+        // Проверяем, является ли пользователь текущим участником
+        const isChecked = currentMemberIds.includes(user.userId);
+        userHtml += `
+            <label class="flex items-center p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 cursor-pointer">
+                <input type="checkbox" class="member-checkbox h-5 w-5 rounded mr-3" value="${user.userId}" ${isChecked ? 'checked' : ''}>
+                <span class="text-lg">${user.name}</span>
+            </label>
+        `;
+    });
+    
+    listContainer.innerHTML = userHtml;
+    modal.classList.add('active');
 }

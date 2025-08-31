@@ -114,3 +114,49 @@ export function addTask(payload) {
         return res.json();
     });
 }
+
+/**
+ * Отправляет запрос на удаление (архивацию) задачи.
+ * @param {object} payload - Объект с taskId и именем пользователя.
+ * @returns {Promise<object>}
+ */
+export function deleteTask(payload) {
+    return fetch('/api/deletetask', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+    }).then(res => {
+        if (!res.ok) throw new Error('Ошибка при удалении задачи');
+        return res.json();
+    });
+}
+
+/**
+ * Запрашивает список ID участников для конкретного проекта.
+ * @param {string} projectId ID проекта.
+ * @returns {Promise<string[]>}
+ */
+export function getProjectMembers(projectId) {
+    return fetch(`/api/project/${projectId}/members`)
+        .then(res => {
+            if (!res.ok) throw new Error('Ошибка при загрузке участников проекта');
+            return res.json();
+        });
+}
+
+/**
+ * Обновляет список участников проекта.
+ * @param {string} projectId ID проекта.
+ * @param {object} payload Объект с массивом memberIds и modifierName.
+ * @returns {Promise<object>}
+ */
+export function updateProjectMembers(projectId, payload) {
+    return fetch(`/api/project/${projectId}/members`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+    }).then(res => {
+        if (!res.ok) throw new Error('Ошибка при сохранении участников проекта');
+        return res.json();
+    });
+}

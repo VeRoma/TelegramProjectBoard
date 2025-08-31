@@ -369,3 +369,22 @@ body[style*="--tg-color-scheme: dark"] .task-status-checker {
     background-color: #dc3545;
     /* Красный цвет для ошибки */
 }
+
+.modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.6);
+    display: none;
+    /* <-- Этот стиль скрывает окно по умолчанию */
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+}
+
+.modal-overlay.active {
+    display: flex;
+    /* <-- Этот стиль показывает окно, когда JS добавляет класс .active */
+}

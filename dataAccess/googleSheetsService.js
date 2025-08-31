@@ -78,9 +78,12 @@ const getAllStatuses = async () => {
     }));
 };
 
+// --- ИЗМЕНЕНИЕ №1: Фильтрация удаленных задач ---
 const getTasks = async () => {
     const tasksSheet = await getSheet(SHEET_NAMES.TASKS);
-    return await tasksSheet.getRows();
+    const rows = await tasksSheet.getRows();
+    // Фильтруем задачи, чтобы не получать те, у которых is_deleted = TRUE
+    return rows.filter(row => row.get('is_deleted') !== 'TRUE');
 };
 
 const getEmployeeById = async (tgUserId) => {
@@ -130,7 +133,8 @@ const addTaskToSheet = async (newTaskData, creatorName) => {
         [TASK_COLUMNS.STATUS_ID]: newTaskData.statusId,
         [TASK_COLUMNS.PRIORITY]: newTaskData.priority,
         [TASK_COLUMNS.VERSION]: 0,
-        [TASK_COLUMNS.AUTHOR_USER_ID]: newTaskData.creatorId
+        [TASK_COLUMNS.AUTHOR_USER_ID]: newTaskData.creatorId,
+        'is_deleted': 'FALSE' // Явно указываем при создании
     };
 
     const addedRow = await tasksSheet.addRow(newRowData);
@@ -138,19 +142,17 @@ const addTaskToSheet = async (newTaskData, creatorName) => {
 };
 
 const updateTaskPrioritiesInSheet = async (tasksToUpdate) => {
-    console.log('GOOGLE SHEETS SERVICE.JS: updateTaskPrioritiesInSheet called with', tasksToUpdate);
     try {
         const sheet = await getSheet(SHEET_NAMES.TASKS);
         const rows = await sheet.getRows();
-        console.log('GOOGLE SHEETS SERVICE.JS: Retrieved rows:', rows.length);
 
-        const rowMap = new Map();  
-        rows.forEach(row => {   //
+        const rowMap = new Map();   
+        rows.forEach(row => {
             rowMap.set(row.get(TASK_COLUMNS.TASK_ID), row);
         });
 
         const promises = tasksToUpdate.map(task => {    
-            const row = rowMap.get(task.taskId);    //
+            const row = rowMap.get(task.taskId);
             if (row) {
                 if (task.statusId !== undefined) {
                     row.set(TASK_COLUMNS.STATUS_ID, task.statusId);
@@ -171,6 +173,34 @@ const updateTaskPrioritiesInSheet = async (tasksToUpdate) => {
     }
 };
 
+// --- ИЗМЕНЕНИЕ №2: Новая функция для "мягкого" удаления ---
+const archiveTaskInSheet = async (taskId, modifierName) => {
+    try {
+        const tasksSheet = await getSheet(SHEET_NAMES.TASKS);
+        const rows = await tasksSheet.getRows();
+        const taskRow = rows.find(row => row.get(TASK_COLUMNS.TASK_ID) == taskId);
+
+        if (taskRow) {
+            // Устанавливаем флаг удаления
+            taskRow.set('is_deleted', 'TRUE'); 
+            
+            // Опционально: можно добавить столбцы 'deleted_by' и 'deleted_at' в вашу таблицу
+            // и раскомментировать эти строки для логирования
+            // taskRow.set('deleted_by', modifierName);
+            // taskRow.set('deleted_at', new Date().toISOString());
+            
+            await taskRow.save();
+            return { success: true };
+        } else {
+            throw new Error('Task not found in Google Sheets');
+        }
+    } catch (error) {
+        console.error('Error archiving task in sheet:', error);
+        throw new Error(ERROR_MESSAGES.GOOGLE_SHEET_UPDATE_ERROR);
+    }
+};
+
+
 const logUserAccess = async (user) => {
     const logSheet = doc.sheetsByTitle[SHEET_NAMES.LOGS];
     if (!logSheet) return;
@@ -182,6 +212,75 @@ const logUserAccess = async (user) => {
     });
 };
 
+const getProjectIdsByUserId = async (userId) => {
+    // Убедитесь, что в constants.js у вас есть SHEET_NAMES.PROJECT_MEMBERS
+    const sheet = await getSheet(SHEET_NAMES.PROJECT_MEMBERS);
+    if (!sheet) return [];
+    
+    const rows = await sheet.getRows();
+    const projectIds = new Set();
+    
+    rows.forEach(row => {
+        // Убедитесь, что названия столбцов соответствуют вашей таблице
+        if (row.get('user_id') == userId && row.get('is_active') === 'TRUE') {
+            projectIds.add(row.get('project_id'));
+        }
+    });
+
+    return Array.from(projectIds);
+};
+
+const getMemberIdsByProjectId = async (projectId) => {
+    const sheet = await getSheet(SHEET_NAMES.PROJECT_MEMBERS);
+    if (!sheet) return [];
+    
+    const rows = await sheet.getRows();
+    const memberIds = new Set();
+    
+    rows.forEach(row => {
+        // Убедитесь, что названия столбцов соответствуют вашей таблице
+        if (row.get('project_id') == projectId && row.get('is_active') === 'TRUE') {
+            memberIds.add(row.get('user_id'));
+        }
+    });
+
+    return Array.from(memberIds);
+};
+
+// 2. Добавьте эту функцию для обновления списка участников
+const updateProjectMembersInSheet = async (projectId, newMemberIds, modifierName) => {
+    const sheet = await getSheet(SHEET_NAMES.PROJECT_MEMBERS);
+    const rows = await sheet.getRows();
+    const existingMembers = rows.filter(row => row.get('project_id') == projectId);
+
+    const existingMemberIds = new Set(existingMembers.map(row => row.get('user_id')));
+    const newMemberIdsSet = new Set(newMemberIds);
+
+    const toDeactivate = existingMembers.filter(row => !newMemberIdsSet.has(row.get('user_id')));
+    const toAdd = newMemberIds.filter(id => !existingMemberIds.has(id));
+
+    // Деактивируем старых
+    for (const row of toDeactivate) {
+        row.set('is_active', 'FALSE');
+        await row.save();
+    }
+
+    // Добавляем новых
+    const newRows = toAdd.map(userId => ({
+        'project_id': projectId,
+        'user_id': userId,
+        'is_active': 'TRUE',
+        'date_added': new Date().toISOString()
+    }));
+
+    if (newRows.length > 0) {
+        await sheet.addRows(newRows);
+    }
+
+    return { success: true };
+};
+
+// --- ИЗМЕНЕНИЕ №3: Экспортируем новую функцию ---
 module.exports = {
     loadSheetDataMiddleware,
     getSheet,
@@ -195,6 +294,10 @@ module.exports = {
     updateTaskInSheet,
     addTaskToSheet,
     updateTaskPrioritiesInSheet,
+    archiveTaskInSheet, 
+    getProjectIdsByUserId,
+    getMemberIdsByProjectId,
+    updateProjectMembersInSheet,
     logUserAccess,
     doc,
     getAllEmployees: getAllUsers

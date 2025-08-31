@@ -75,6 +75,17 @@ module.exports = {
         ICON: 'icon',
         ORDER: 'order',
     },
+    // Названия колонок для листа "ProjectMembers" (участники проектов)
+    // колонки: project_member_id	project_id	user_id	project_role_id	date_added	is_active 
+    PROJECT_MEMBERS_COLUMNS: {
+        PROJECT_MEMBER_ID: 'project_member_id',
+        PROJECT_ID: 'project_id',
+        USER_ID: 'user_id',
+        PROJECT_ROLE_ID: 'project_role_id',
+        DATE_ADDED: 'date_added',
+        IS_ACTIVE: 'is_active',
+    },
+    
 
     // Шаблоны сообщений для Telegram бота
     TELEGRAM_MESSAGES: {

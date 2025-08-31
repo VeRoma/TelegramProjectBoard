@@ -11,89 +11,99 @@ document.addEventListener('DOMContentLoaded', () => {
     const mainContainer = document.getElementById('main-content');
     
     mainContainer.addEventListener('click', async (event) => {
-    console.log('[MAIN.JS LOG] Click detected on:', event.target);
+        console.log('[MAIN.JS LOG] Click detected on:', event.target);
 
-    // --- Обработчик клика по иконке статуса в карточке ---
-    const statusActionArea = event.target.closest('.status-action-area');
-    if (statusActionArea) {
-        console.log('[MAIN.JS LOG] Click on .status-action-area detected.');
-        event.stopPropagation();
-        const taskCard = statusActionArea.closest('[data-task-id]');
-        const taskId = taskCard.dataset.taskId;
-        console.log(`[MAIN.JS LOG] Extracted taskId: ${taskId}`);
-        modals.openStatusModal(taskId);
-        return;
-    }
-
-    // --- Обработчик кнопки "Редактировать" ---
-    const editBtn = event.target.closest('.edit-btn');
-    if (editBtn) {
-        console.log('[MAIN.JS LOG] Click on .edit-btn detected.');
-        event.stopPropagation();
-        const detailsContainer = editBtn.closest('.task-details');
-        const currentlyEditing = document.querySelector('.task-details.edit-mode');
-        if (currentlyEditing && currentlyEditing !== detailsContainer) {
-            await handlers.handleSaveActiveTask();
-        }
-        const backButtonHandler = () => {
-            uiUtils.exitEditMode(detailsContainer);
-            uiUtils.updateFabButtonUI(false, handlers.handleSaveActiveTask, handlers.handleShowAddTaskModal);
-        };
-        uiUtils.enterEditMode(detailsContainer, backButtonHandler);
-        uiUtils.updateFabButtonUI(true, handlers.handleSaveActiveTask, handlers.handleShowAddTaskModal);
-        return;
-    }
-
-    // --- Обработчик полей, вызывающих модальные окна в режиме редактирования ---
-    const modalTrigger = event.target.closest('.modal-trigger-field');
-    if (modalTrigger) {
-        console.log('[MAIN.JS LOG] Click on .modal-trigger-field detected.');
-        event.stopPropagation();
-        const modalType = modalTrigger.dataset.modalType;
-        const activeTaskDetailsElement = modalTrigger.closest('.task-details');
-        if (modalType === 'status') {
-             const taskId = activeTaskDetailsElement.closest('[data-task-id]').dataset.taskId;
-             console.log(`[MAIN.JS LOG] Extracted taskId from modal trigger: ${taskId}`);
-             modals.openStatusModal(taskId);
-        }
-        else if (modalType === 'employee') {
-            const appData = store.getAppData();
-            modals.openEmployeeModal(activeTaskDetailsElement, store.getAllEmployees(), appData.userRole);
-        }
-        else if (modalType === 'project') {
-            modals.openProjectModal(activeTaskDetailsElement, store.getAllProjects());
-        }
-        return;
-    }
-
-    // --- Обработчик клика по заголовку ЗАДАЧИ ---
-    const taskHeader = event.target.closest('.task-header');
-    if (taskHeader) {
-        console.log('[MAIN.JS LOG] Click on .task-header detected.');
-        if (event.target.closest('.status-action-area')) return;
-
-        const detailsContainer = taskHeader.nextElementSibling;
-        const currentlyOpen = document.querySelector('.task-details.expanded');
-
-        if (currentlyOpen && currentlyOpen !== detailsContainer) {
-            currentlyOpen.classList.remove('expanded');
-            setTimeout(() => { if (currentlyOpen) currentlyOpen.innerHTML = ''; }, 300);
+        // --- Обработчик клика по иконке статуса в карточке ---
+        const statusActionArea = event.target.closest('.status-action-area');
+        if (statusActionArea) {
+            console.log('[MAIN.JS LOG] Click on .status-action-area detected.');
+            event.stopPropagation();
+            const taskCard = statusActionArea.closest('[data-task-id]');
+            const taskId = taskCard.dataset.taskId;
+            console.log(`[MAIN.JS LOG] Extracted taskId: ${taskId}`);
+            modals.openStatusModal(taskId);
+            return;
         }
 
-        if (!detailsContainer.innerHTML) {
-            const appData = store.getAppData();
-            render.renderTaskDetails(detailsContainer, appData.userRole);
+        // --- Обработчик кнопки "Редактировать" ---
+        const editBtn = event.target.closest('.edit-btn');
+        if (editBtn) {
+            console.log('[MAIN.JS LOG] Click on .edit-btn detected.');
+            event.stopPropagation();
+            const detailsContainer = editBtn.closest('.task-details');
+            const currentlyEditing = document.querySelector('.task-details.edit-mode');
+            if (currentlyEditing && currentlyEditing !== detailsContainer) {
+                await handlers.handleSaveActiveTask();
+            }
+            const backButtonHandler = () => {
+                uiUtils.exitEditMode(detailsContainer);
+                uiUtils.updateFabButtonUI(false, handlers.handleSaveActiveTask, handlers.handleShowAddTaskModal);
+            };
+            uiUtils.enterEditMode(detailsContainer, backButtonHandler);
+            uiUtils.updateFabButtonUI(true, handlers.handleSaveActiveTask, handlers.handleShowAddTaskModal);
+            return;
         }
 
-        detailsContainer.classList.toggle('expanded');
-
-        if (!detailsContainer.classList.contains('expanded')) {
-            setTimeout(() => { if (detailsContainer) detailsContainer.innerHTML = ''; }, 300);
+        // --- Обработчик полей, вызывающих модальные окна в режиме редактирования ---
+        const modalTrigger = event.target.closest('.modal-trigger-field');
+        if (modalTrigger) {
+            console.log('[MAIN.JS LOG] Click on .modal-trigger-field detected.');
+            event.stopPropagation();
+            const modalType = modalTrigger.dataset.modalType;
+            const activeTaskDetailsElement = modalTrigger.closest('.task-details');
+            if (modalType === 'status') {
+                const taskId = activeTaskDetailsElement.closest('[data-task-id]').dataset.taskId;
+                console.log(`[MAIN.JS LOG] Extracted taskId from modal trigger: ${taskId}`);
+                modals.openStatusModal(taskId);
+            }
+            else if (modalType === 'employee') {
+                const appData = store.getAppData();
+                modals.openEmployeeModal(activeTaskDetailsElement, store.getAllEmployees(), appData.userRole);
+            }
+            else if (modalType === 'project') {
+                modals.openProjectModal(activeTaskDetailsElement, store.getAllProjects());
+            }
+            return;
         }
-        return;
-    }
 
-    const projectHeader = event.target.closest('.project-header');
+        // --- Обработчик клика по заголовку ЗАДАЧИ ---
+        const taskHeader = event.target.closest('.task-header');
+        if (taskHeader) {
+            console.log('[MAIN.JS LOG] Click on .task-header detected.');
+            if (event.target.closest('.status-action-area')) return;
+
+            const detailsContainer = taskHeader.nextElementSibling;
+            const currentlyOpen = document.querySelector('.task-details.expanded');
+
+            if (currentlyOpen && currentlyOpen !== detailsContainer) {
+                currentlyOpen.classList.remove('expanded');
+                setTimeout(() => { if (currentlyOpen) currentlyOpen.innerHTML = ''; }, 300);
+            }
+
+            if (!detailsContainer.innerHTML) {
+                const appData = store.getAppData();
+                render.renderTaskDetails(detailsContainer, appData.userRole);
+            }
+
+            detailsContainer.classList.toggle('expanded');
+
+            if (!detailsContainer.classList.contains('expanded')) {
+                setTimeout(() => { if (detailsContainer) detailsContainer.innerHTML = ''; }, 300);
+            }
+            return;
+        }
+
+        const manageMembersBtn = event.target.closest('.manage-members-btn');
+        if (manageMembersBtn) {
+            console.log('[MAIN.JS LOG] Click on .manage-members-btn detected.');
+            event.stopPropagation();
+            const projectId = manageMembersBtn.dataset.projectId;
+            const projectName = manageMembersBtn.dataset.projectName;
+            handlers.handleManageMembers(projectId, projectName);
+            return;
+        }
+
+        const projectHeader = event.target.closest('.project-header');
         if (projectHeader) {
             console.log('[MAIN.JS LOG] Final Fix: Click on .project-header detected.');
 
@@ -109,8 +119,8 @@ document.addEventListener('DOMContentLoaded', () => {
             const projectsContainer = document.getElementById('projects-container');
 
             if (!projectBody || !projectsContainer) {
-                 console.error('[MAIN.JS FATAL] Could not find projectBody (.project-content) or projectsContainer. Aborting.');
-                 return;
+                console.error('[MAIN.JS FATAL] Could not find projectBody (.project-content) or projectsContainer. Aborting.');
+                return;
             }
 
             const wasOpen = projectBody.classList.contains('expanded');
@@ -132,8 +142,20 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             return;
         }
-    
-});
+
+        const deleteBtn = event.target.closest('.delete-btn');
+        if (deleteBtn) {
+            console.log('[MAIN.JS LOG] Click on .delete-btn detected.');
+            event.stopPropagation();
+            const taskCard = deleteBtn.closest('[data-task-id]');
+            const taskId = taskCard.dataset.taskId;
+            handlers.handleDeleteTask(taskId); // Вызываем наш новый хендлер
+            return;
+        }   
+        
+        
+        
+    });
 
     let draggedElement = null;
 
