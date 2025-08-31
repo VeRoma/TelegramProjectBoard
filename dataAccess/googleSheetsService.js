@@ -145,6 +145,7 @@ const addTaskToSheet = async (newTaskData, creatorName) => {
         [TASK_COLUMNS.PRIORITY]: newTaskData.priority,
         [TASK_COLUMNS.VERSION]: 0,
         [TASK_COLUMNS.AUTHOR_USER_ID]: newTaskData.creatorId,
+        [TASK_COLUMNS.STAGE_ID]: newTaskData.stageId,
         [TASK_COLUMNS.IS_DELETED]: 'FALSE'
     };
 

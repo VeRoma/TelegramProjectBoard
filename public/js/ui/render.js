@@ -230,6 +230,11 @@ export function renderTaskDetails(detailsContainer, userRole) {
                 <div class="view-field mt-1"><p class="task-project-view">${task.project}</p></div>
                 <div class="edit-field modal-trigger-field mt-1 p-2 border rounded-md" data-modal-type="project" style="border-color: var(--tg-theme-hint-color);"><p class="task-project-view">${task.project}</p><svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg></div>
             </div>
+            <div>
+                <label class="text-xs font-medium text-gray-500">Этап</label>
+                <div class="view-field mt-1"><p class="task-stage-view">${store.getStageNameById(task.stageId) || 'Не назначен'}</p></div>
+                <div class="edit-field modal-trigger-field mt-1 p-2 border rounded-md" data-modal-type="stage" style="border-color: var(--tg-theme-hint-color);"><p class="task-stage-view">${store.getStageNameById(task.stageId) || 'Не назначен'}</p><svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg></div>
+            </div>
             ${responsibleFieldHtml}
             <div class="text-xs mt-2" style="color: var(--tg-theme-hint-color);">
                 <span>Последнее изменение: ${task.modifiedBy || 'N/A'} (${task.modifiedAt || 'N/A'})</span>

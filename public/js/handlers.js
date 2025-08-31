@@ -29,10 +29,16 @@ export async function handleSaveActiveTask() {
     const statusName = activeEditElement.querySelector('.task-status-view').textContent;
     const statusId = (statuses.find(s => s.name === statusName) || {}).statusId;
 
-    const projects = store.getAllProjects();
+    const allProjects = store.getAppData().allProjects;
     const projectName = activeEditElement.querySelector('.task-project-view').textContent;
-    const project = projects.find(p => p.name === projectName);
+    const project = allProjects.find(p => p.projectName === projectName);
     const projectId = project ? project.projectId : null;
+
+    // --- ИЗМЕНЕНИЕ: Получаем stageId ---
+    const stageName = activeEditElement.querySelector('.task-stage-view').textContent;
+    const allStages = store.getAppData().allStages || [];
+    const stage = allStages.find(s => s.name === stageName);
+    const stageId = stage ? stage.stageId : null;
 
     const updatedTask = {
         ...taskInAppData,
@@ -41,12 +47,14 @@ export async function handleSaveActiveTask() {
         statusId: statusId,
         project: projectName,
         projectId: projectId,
+        stageId: stageId, // <-- Добавлено
         responsible: selectedEmployeeNames.join(', '),
         responsibleUserIds: responsibleUserIds,
         version: parseInt(activeEditElement.dataset.version, 10),
     };
 
     try {
+        // Предполагается, что saveTask на сервере умеет обрабатывать stageId
         const result = await api.saveTask({ taskData: updatedTask, modifierName: appData.userName });
         if (result.status === 'success') {
             uiUtils.showMessage('Изменения сохранены', 'success');
@@ -59,7 +67,8 @@ export async function handleSaveActiveTask() {
             uiUtils.updateFabButtonUI(false, null, handleShowAddTaskModal);
             
             const accordionState = uiUtils.getAccordionState();
-            render.renderProjects(appData.projects, appData.userName, appData.userRole, accordionState);
+            // Передаем фильтры при перерисовке
+            render.renderProjects(appData.projects, appData.userName, appData.userRole, accordionState, store.getStageFilters());
 
         } else {
              uiUtils.showMessage('Ошибка сохранения: ' + (result.error || 'Неизвестная ошибка'), 'error');
@@ -77,28 +86,30 @@ export function handleShowAddTaskModal() {
 
 export async function handleCreateTask(taskData) {
     const appData = store.getAppData();
-    const isLimitedView = !['owner', 'admin'].includes(appData.userRole);
+    const allProjects = store.getAppData().projects;
+    // Находим имя проекта по projectId
+    const projectForTask = store.getAllProjects().find(p => p.projectId === taskData.projectId);
+    const projectName = projectForTask ? projectForTask.projectName : '';
 
-    const allTasksForScope = isLimitedView
-        ? appData.projects.flatMap(p => p.tasks)
-        : (appData.projects.find(p => p.name === taskData.project) || { tasks: [] }).tasks;
-
+    const allTasksForScope = (allProjects.find(p => p.name === projectName) || { tasks: [] }).tasks;
     const tasksInGroup = allTasksForScope.filter(t => t.status === taskData.status);
     const maxPriority = Math.max(0, ...tasksInGroup.map(t => t.priority));
     taskData.priority = maxPriority + 1;
     
     const tempTaskId = `temp_${Date.now()}`;
-    const optimisticTask = { ...taskData, taskId: tempTaskId, version: 0 };
-    let targetProject = appData.projects.find(p => p.name === optimisticTask.project);
+    // Добавляем имя проекта в оптимистичный таск
+    const optimisticTask = { ...taskData, taskId: tempTaskId, project: projectName, version: 0 };
+    
+    let targetProject = allProjects.find(p => p.name === optimisticTask.project);
     if (!targetProject) {
         targetProject = { name: optimisticTask.project, tasks: [] };
-        appData.projects.push(targetProject);
+        allProjects.push(targetProject);
     }
     targetProject.tasks.push(optimisticTask);
     modals.closeAddTaskModal();
     
     const accordionStateBefore = uiUtils.getAccordionState();
-    render.renderProjects(appData.projects, appData.userName, appData.userRole, accordionStateBefore);
+    render.renderProjects(allProjects, appData.userName, appData.userRole, accordionStateBefore, store.getStageFilters());
     uiUtils.showMessage('Задача добавлена, идет сохранение...', 'info');
     
     try {
@@ -106,10 +117,12 @@ export async function handleCreateTask(taskData) {
         if (result.status === 'success' && result.tasks && result.tasks.length > 0) {
             const finalTask = result.tasks[0];
             const taskToUpdate = targetProject.tasks.find(t => t.taskId === tempTaskId);
-            if (taskToUpdate) Object.assign(taskToUpdate, finalTask);
+            if (taskToUpdate) {
+                Object.assign(taskToUpdate, finalTask, { project: projectName });
+            }
             
             const accordionStateAfter = uiUtils.getAccordionState();
-            render.renderProjects(appData.projects, appData.userName, appData.userRole, accordionStateAfter);
+            render.renderProjects(allProjects, appData.userName, appData.userRole, accordionStateAfter, store.getStageFilters());
             uiUtils.showMessage('Задача успешно сохранена', 'success');
 
         } else {
@@ -122,20 +135,17 @@ export async function handleCreateTask(taskData) {
 }
 
 export async function handleStatusUpdate(taskId, newStatusName) {
-    console.log(`[HANDLERS.JS LOG] handleStatusUpdate received: taskId=${taskId}, newStatusName=${newStatusName}`);
-   
-    const appData = store.getAppData(); // Получаем текущее состояние приложения из хранилища
+    const appData = store.getAppData();
     const { task, project } = store.findTask(taskId);
     if (!task || !project) {
         console.error("[HANDLERS.JS ERROR] Task not found in store for ID:", taskId);
-        
         return;
     }
     
     const oldStatus = task.status;
     const oldPriority = task.priority;
     
-    const isLimitedView = !['owner', 'admin'].includes(appData.userRole);   // Проверяем, ограничен ли вид пользователя
+    const isLimitedView = !['owner', 'admin'].includes(appData.userRole);
 
     const allTasksForScope = isLimitedView 
         ? appData.projects.flatMap(p => p.tasks)
@@ -147,26 +157,22 @@ export async function handleStatusUpdate(taskId, newStatusName) {
         task.priority = 999;
     } else {
         const tasksInNewGroup = allTasksForScope.filter(t => t.status === newStatusName && t.taskId !== task.taskId);
-        // Исключаем текущую задачу из подсчёта. Она уже в новой группе
-
-        const maxPriority = Math.max(0, ...tasksInNewGroup.map(t => t.priority));   // Максимальный приоритет в новой группе
-        
-        task.priority = maxPriority + 1;    // Новому статусу присваиваем приоритет на 1 больше максимального в этой группе
+        const maxPriority = Math.max(0, ...tasksInNewGroup.map(t => t.priority));   
+        task.priority = maxPriority + 1;
     }
-    const tasksInOldGroup = allTasksForScope.filter(t => t.status === oldStatus && t.taskId !== task.taskId); // Задачи в старой группе, исключая текущую задачу
+    const tasksInOldGroup = allTasksForScope.filter(t => t.status === oldStatus && t.taskId !== task.taskId);
     tasksInOldGroup.sort((a, b) => a.priority - b.priority).forEach((t, index) => {
-        t.priority = index + 1; // Перенумеровываем задачи в старой группе
+        t.priority = index + 1;
     });
 
-    const accordionState = uiUtils.getAccordionState(); //
-    render.renderProjects(appData.projects, appData.userName, appData.userRole, accordionState);    // Перерисовываем проекты с учётом изменений
+    const accordionState = uiUtils.getAccordionState();
+    // Передаем фильтры при перерисовке
+    render.renderProjects(appData.projects, appData.userName, appData.userRole, accordionState, store.getStageFilters());
     uiUtils.showMessage('Статус обновлён, идет сохранение...', 'info');
     
-    const statuses = store.getAllStatuses();    // Получаем все статусы из хранилища
-    // Формируем массив задач для обновления на сервере
-
+    const statuses = store.getAllStatuses();
     const tasksToUpdate = [...tasksInOldGroup, task].map(t => {
-        const statusId = (statuses.find(s => s.name === t.status) || {}).statusId;  // Находим ID статуса по имени
+        const statusId = (statuses.find(s => s.name === t.status) || {}).statusId;
         return {
             taskId: t.taskId,
             priority: t.priority,
@@ -175,24 +181,18 @@ export async function handleStatusUpdate(taskId, newStatusName) {
     });
 
     try {
-        console.log('[HANDLERS.JS LOG] Preparing to send to /updatepriorities:', tasksToUpdate);
-        
         const result = await api.updatePriorities({ tasks: tasksToUpdate, modifierName: appData.userName });
         if (result.status !== 'success') throw new Error(result.error || 'Ошибка сохранения');
         uiUtils.showMessage('Сохранение завершено', 'success');
     } catch (error) {
         console.error('[HANDLERS.JS ERROR] Failed to update priorities:', error);
-        
         uiUtils.showMessage('Не удалось сохранить изменения: ' + error.message, 'error');
         task.status = oldStatus;
         task.priority = oldPriority;
-        // setTimeout(() => window.location.reload(), 2000);   
     }
 }
 
 export function handleDragDrop(groupName, updatedTaskIdsInGroup, userRole) {
-    console.log(`[HANDLERS.JS LOG] handleDragDrop received: groupName=${groupName}, new order=`, updatedTaskIdsInGroup);
-    
     const appData = store.getAppData();
     let tasksForScope;
 
@@ -220,8 +220,6 @@ export function handleDragDrop(groupName, updatedTaskIdsInGroup, userRole) {
     }).filter(Boolean);
     
     if (tasksToUpdate.length > 0) {
-        console.log('[HANDLERS.JS LOG] Preparing to send to /updatepriorities after drag-drop:', tasksToUpdate);
-        
         uiUtils.showMessage('Идет сохранение нового порядка задач...', 'info');
         
         api.updatePriorities({ tasks: tasksToUpdate, modifierName: appData.userName })
@@ -243,7 +241,8 @@ export function handleSaveNewTaskClick() {
     const appData = store.getAppData();
     
     const taskName = document.getElementById('new-task-name')?.value;
-    const projectName = document.getElementById('new-task-project')?.value;
+    const projectId = document.getElementById('new-task-project')?.value;
+    const stageId = document.getElementById('new-task-stage')?.value;
     const activeStatusElement = document.querySelector('#new-task-status-toggle .toggle-option.active');
     const statusName = activeStatusElement ? activeStatusElement.dataset.status : 'К выполнению';
 
@@ -256,8 +255,9 @@ export function handleSaveNewTaskClick() {
         responsibleNames = [...responsibleCheckboxes].map(cb => cb.value);
     }
 
-    if (!taskName || !projectName || (!isLimitedView && responsibleNames.length === 0)) {
-        return uiUtils.showMessage('Пожалуйста, заполните поля: Наименование, Проект и Ответственный.', 'error');
+    // --- ИЗМЕНЕНИЕ: Добавлена проверка на stageId ---
+    if (!taskName || !projectId || !stageId || (!isLimitedView && responsibleNames.length === 0)) {
+        return uiUtils.showMessage('Пожалуйста, заполните все поля: Наименование, Проект, Этап и Ответственный.', 'error');
     }
 
     const allEmployees = store.getAllEmployees();
@@ -267,19 +267,15 @@ export function handleSaveNewTaskClick() {
     const statuses = store.getAllStatuses();
     const statusId = (statuses.find(s => s.name === statusName) || {}).statusId;
 
-    const projects = store.getAllProjects();
-    const project = projects.find(p => p.name === projectName);
-    const projectId = project ? project.projectId : null;
-    
     const currentUser = allEmployees.find(u => u.name === appData.userName);
     const creatorId = currentUser ? currentUser.userId : null;
 
     handleCreateTask({
         name: taskName,
-        project: projectName,
         projectId: projectId,
         status: statusName,
         statusId: statusId,
+        stageId: stageId, // <-- Добавлено
         responsible: responsibleNames.join(', '),
         creatorId: creatorId,
         responsibleUserIds: responsibleUserIds
@@ -287,7 +283,6 @@ export function handleSaveNewTaskClick() {
 }
 
 export async function handleDeleteTask(taskId) {
-    // Простое, но эффективное подтверждение
     if (!confirm('Вы уверены, что хотите удалить эту задачу?')) {
         return;
     }
@@ -298,17 +293,14 @@ export async function handleDeleteTask(taskId) {
         const result = await api.deleteTask({ taskId: taskId, modifierName: appData.userName });
 
         if (result.status === 'success') {
-            // Оптимистичное обновление интерфейса
-            // 1. Находим проект, в котором находится задача
             const { project } = store.findTask(taskId);
             if (project) {
-                // 2. Удаляем задачу из массива задач этого проекта
                 project.tasks = project.tasks.filter(t => t.taskId !== taskId);
             }
             
-            // 3. Перерисовываем всё
             const accordionState = uiUtils.getAccordionState();
-            render.renderProjects(appData.projects, appData.userName, appData.userRole, accordionState);
+            // Передаем фильтры при перерисовке
+            render.renderProjects(appData.projects, appData.userName, appData.userRole, accordionState, store.getStageFilters());
             uiUtils.showMessage('Задача успешно удалена', 'success');
         } else {
             throw new Error(result.error || 'Неизвестная ошибка сервера');
@@ -321,17 +313,12 @@ export async function handleDeleteTask(taskId) {
 export async function handleManageMembers(projectId, projectName) {
     try {
         uiUtils.showMessage('Загрузка участников...', 'info');
-        // Получаем всех пользователей из хранилища
         const allUsers = store.getAllEmployees();
-        // Запрашиваем с сервера ID текущих участников проекта
         const currentMemberIds = await api.getProjectMembers(projectId);
         
-        // Открываем модальное окно с данными
         modals.openManageMembersModal(projectName, allUsers, currentMemberIds);
         
-        // Настраиваем кнопку "Сохранить"
         const saveBtn = document.getElementById('save-members-btn');
-        // Удаляем старый обработчик, чтобы избежать дублирования
         saveBtn.replaceWith(saveBtn.cloneNode(true));
         document.getElementById('save-members-btn').addEventListener('click', () => {
              handleSaveMembers(projectId);
@@ -370,11 +357,7 @@ export async function handleManageStages(projectId, projectName) {
     try {
         uiUtils.showMessage('Загрузка этапов...', 'info');
         const allStages = await api.getAllStages();
-        
-        // --- ИЗМЕНЕНИЕ ЗДЕСЬ ---
-        // Берем активные этапы для этого проекта из нашего хранилища
         const activeStageIds = store.getStageFilters()[projectId] || [];
-        // -------------------------
         
         modals.openManageStagesModal(projectName, allStages, activeStageIds);
         
@@ -401,19 +384,13 @@ async function handleSaveStages(projectId) {
             document.getElementById('manage-stages-modal').classList.remove('active');
             uiUtils.showMessage('Список этапов обновлен!', 'success');
             
-            // --- НОВАЯ ЛОГИКА ПЕРЕРИСОВКИ ---
             const appData = store.getAppData();
-            // 1. Получаем все текущие фильтры из хранилища
             const currentFilters = store.getStageFilters();
-            // 2. Обновляем фильтр для конкретного проекта
             currentFilters[projectId] = newStageIds;
-            // 3. Сохраняем обновленный объект фильтров обратно в хранилище
             store.setStageFilters(currentFilters);
             
-            // 4. Перерисовываем все проекты с учетом полного набора фильтров
             const accordionState = uiUtils.getAccordionState();
             render.renderProjects(appData.projects, appData.userName, appData.userRole, accordionState, currentFilters);
-            // --- КОНЕЦ НОВОЙ ЛОГИКИ ---
 
         } else {
             throw new Error(result.error || 'Неизвестная ошибка сервера');

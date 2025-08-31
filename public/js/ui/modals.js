@@ -7,8 +7,44 @@ const statusModal = document.getElementById('status-modal');
 const employeeModal = document.getElementById('employee-modal');
 const projectModal = document.getElementById('project-modal');
 const addTaskModal = document.getElementById('add-task-modal');
+const stageModal = document.getElementById('stage-modal');
+const manageMembersModal = document.getElementById('manage-members-modal');
+const manageStagesModal = document.getElementById('manage-stages-modal');
 
 let statusModalContentLoaded = false;
+
+export function openStageModal(activeTaskDetailsElement) {
+    const taskData = JSON.parse(activeTaskDetailsElement.dataset.task);
+    const projectId = taskData.projectId;
+    const currentStageId = taskData.stageId;
+
+    const activeStageIds = new Set((store.getStageFilters()[projectId] || []).map(String));
+    const allStages = store.getAppData().allStages || [];
+
+    const availableStages = allStages.filter(s => activeStageIds.has(String(s.stageId)));
+
+    stageModal.innerHTML = `
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 class="font-bold">Выберите этап</h3>
+                <button class="modal-close-btn">&times;</button>
+            </div>
+            <div class="modal-body">
+                ${availableStages.map(stage => `
+                    <label class="flex items-center p-3 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 cursor-pointer">
+                        <input type="radio" name="stage" value="${stage.stageId}" ${stage.stageId == currentStageId ? 'checked' : ''} class="w-4 h-4">
+                        <span class="ml-3">${stage.name}</span>
+                    </label>
+                `).join('')}
+            </div>
+            <div class="modal-footer">
+                <button class="modal-select-btn px-4 py-2 rounded-lg">Выбрать</button>
+            </div>
+        </div>`;
+    
+    stageModal.classList.add('active');
+    stageModal.dataset.targetElementId = activeTaskDetailsElement.id;
+}
 
 export function openStatusModal(taskId) {
     console.log(`[MODALS.JS LOG] openStatusModal received taskId: ${taskId}`);
@@ -43,7 +79,7 @@ export async function openEmployeeModal(activeTaskDetailsElement, allEmployees, 
     const currentResponsibleText = activeTaskDetailsElement.querySelector('.task-responsible-view').textContent;
 
     if (isLimitedView) {
-        employeeModal.innerHTML = `
+         employeeModal.innerHTML = `
             <div class="modal-content">
                 <div class="p-4 border-b" style="border-color: var(--tg-theme-hint-color);">
                     <h3 class="text-lg font-bold">Ответственные</h3>
@@ -64,7 +100,7 @@ export async function openEmployeeModal(activeTaskDetailsElement, allEmployees, 
         } catch (error) {
             console.error('Failed to load project members for editing:', error);
             uiUtils.showMessage('Ошибка загрузки участников проекта', 'error');
-            employeesToShow = allEmployees; // Fallback
+            employeesToShow = allEmployees;
         }
         
         employeesToShow.sort((a, b) => a.name.localeCompare(b.name));
@@ -89,7 +125,7 @@ export async function openEmployeeModal(activeTaskDetailsElement, allEmployees, 
             </div>`;
     }
     employeeModal.classList.add('active');
-    employeeModal.dataset.targetElement = `#${activeTaskDetailsElement.id}`;
+    employeeModal.dataset.targetElementId = activeTaskDetailsElement.id;
 }
 
 export function openProjectModal(activeTaskDetailsElement, allProjects) {
@@ -97,7 +133,7 @@ export function openProjectModal(activeTaskDetailsElement, allProjects) {
     const currentProject = activeTaskDetailsElement.querySelector('.task-project-view').textContent;
     projectModal.innerHTML = `<div class="modal-content"><div class="p-4 border-b" style="border-color: var(--tg-theme-hint-color);"><h3 class="text-lg font-bold">Выберите проект</h3></div><div class="modal-body">${allProjects.map(p => `<label class="flex items-center space-x-3 p-3 rounded-md hover:bg-gray-200"><input type="radio" name="project" value="${p.projectName}" ${p.projectName === currentProject ? 'checked' : ''} class="w-4 h-4"><span>${p.projectName}</span></label>`).join('')}</div><div class="p-2 border-t flex justify-end" style="border-color: var(--tg-theme-hint-color);"><button class="modal-select-btn px-4 py-2 rounded-lg">Выбрать</button></div></div>`;
     projectModal.classList.add('active');
-    projectModal.dataset.targetElement = `#${activeTaskDetailsElement.id}`;
+    projectModal.dataset.targetElementId = activeTaskDetailsElement.id;
 }
 
 export function openAddTaskModal(allProjects, allEmployees, userRole, userName) {
@@ -118,7 +154,6 @@ export function openAddTaskModal(allProjects, allEmployees, userRole, userName) 
         `;
     }).join('');
 
-    // Шаг 1: Создаем HTML-структуру модального окна
     addTaskModal.innerHTML = `
         <div class="modal-content">
             <div class="p-4 border-b">
@@ -137,6 +172,12 @@ export function openAddTaskModal(allProjects, allEmployees, userRole, userName) 
                     </select>
                 </div>
                 <div>
+                    <label class="text-xs font-medium text-gray-500">Этап</label>
+                    <select id="new-task-stage" class="details-input mt-1" required>
+                        <option value="" disabled selected>Сначала выберите проект...</option>
+                    </select>
+                </div>
+                <div>
                     <label class="text-xs font-medium text-gray-500">Статус</label>
                     <div id="new-task-status-toggle" class="status-toggle">${statusToggleHtml}</div>
                 </div>
@@ -149,12 +190,12 @@ export function openAddTaskModal(allProjects, allEmployees, userRole, userName) 
             </div>
         </div>`;
 
-    // Шаг 2: Теперь, когда HTML в DOM, получаем элементы
     const projectSelect = document.getElementById('new-task-project');
     const employeeContainer = document.getElementById('new-task-employees-list');
     const employeeSection = document.getElementById('new-task-employees-container');
     const statusToggle = document.getElementById('new-task-status-toggle');
-
+    const stageSelect = document.getElementById('new-task-stage');
+    
     if (userRole === 'admin' || userRole === 'owner') {
         employeeSection.style.display = 'block';
     }
@@ -172,13 +213,14 @@ export function openAddTaskModal(allProjects, allEmployees, userRole, userName) 
         `).join('');
     };
 
-    // Шаг 3: Добавляем динамический обработчик событий
     projectSelect.addEventListener('change', async (event) => {
         const projectId = event.target.value;
         if (!projectId) {
             renderEmployees([]);
+            stageSelect.innerHTML = '<option value="" disabled selected>Сначала выберите проект...</option>';
             return;
         }
+
         try {
             const memberIds = await api.getProjectMembers(projectId);
             const memberIdsSet = new Set(memberIds);
@@ -188,6 +230,14 @@ export function openAddTaskModal(allProjects, allEmployees, userRole, userName) 
             console.error('Failed to load project members:', error);
             renderEmployees([]);
         }
+
+        const activeStageIds = new Set((store.getStageFilters()[projectId] || []).map(String));
+        const allStages = store.getAppData().allStages || [];
+        const availableStages = allStages.filter(s => activeStageIds.has(String(s.stageId)));
+        
+        stageSelect.innerHTML = availableStages.map(stage => 
+            `<option value="${stage.stageId}">${stage.name}</option>`
+        ).join('');
     });
 
     if (statusToggle) {
@@ -214,62 +264,14 @@ export function closeAddTaskModal() {
     uiUtils.updateFabButtonUI(false, handlers.handleSaveActiveTask, handlers.handleShowAddTaskModal);
 }
 
-export function setupModals(onStatusChange) {
-    const modals = [statusModal, employeeModal, projectModal, addTaskModal];
-    modals.forEach(modal => {
-        modal.addEventListener('click', (e) => {
-            if (e.target === modal) {
-                if (modal.id === 'add-task-modal') {
-                    closeAddTaskModal();
-                } else {
-                    modal.classList.remove('active');
-                    document.body.classList.remove('overflow-hidden');
-                }
-            }
-
-            if (modal.id === 'status-modal' && e.target.closest('.status-option')) {
-                const selectedOption = e.target.closest('.status-option');
-                
-                const taskId = modal.dataset.currentTaskId;
-                console.log(`[MODALS.JS LOG] Extracted taskId from modal dataset: ${taskId}`);
-                
-                const newStatus = selectedOption.dataset.statusValue;
-                onStatusChange(taskId, newStatus);
-
-                modal.classList.remove('active');
-                document.body.classList.remove('overflow-hidden');
-            }
-            
-            if (e.target.closest('.modal-select-btn') && modal.id !== 'add-task-modal') {
-                const targetElement = document.querySelector(modal.dataset.targetElement);
-                if (!targetElement) return;
-                if (modal.id === 'employee-modal') {
-                    const selected = [...modal.querySelectorAll('.employee-checkbox:checked')].map(cb => cb.value);
-                    targetElement.querySelector('.task-responsible-view').textContent = selected.join(', ');
-                } else if (modal.id === 'project-modal') {
-                    const selected = modal.querySelector('input[name="project"]:checked');
-                    if (selected) targetElement.querySelector('.task-project-view').textContent = selected.value;
-                }
-                modal.classList.remove('active');
-                document.body.classList.remove('overflow-hidden');
-            }
-        });
-    });
-}
-
 export function openManageMembersModal(projectName, allUsers, currentMemberIds) {
-    const modal = document.getElementById('manage-members-modal');
     const listContainer = document.getElementById('members-modal-list');
     const projectNameEl = document.getElementById('members-modal-project-name');
-
     projectNameEl.textContent = projectName;
-    
-    // Сортируем пользователей по имени
     allUsers.sort((a, b) => a.name.localeCompare(b.name));
 
     let userHtml = '';
     allUsers.forEach(user => {
-        // Проверяем, является ли пользователь текущим участником
         const isChecked = currentMemberIds.includes(user.userId);
         userHtml += `
             <label class="flex items-center p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 cursor-pointer">
@@ -280,17 +282,14 @@ export function openManageMembersModal(projectName, allUsers, currentMemberIds) 
     });
     
     listContainer.innerHTML = userHtml;
-    modal.classList.add('active');
+    manageMembersModal.classList.add('active');
 }
 
 export function openManageStagesModal(projectName, allStages, activeStageIds) {
-    const modal = document.getElementById('manage-stages-modal');
     const listContainer = document.getElementById('stages-modal-list');
     const projectNameEl = document.getElementById('stages-modal-project-name');
-
     projectNameEl.textContent = projectName;
     
-    // Превращаем массив ID в Set для быстрой проверки
     const activeStageIdsSet = new Set(activeStageIds.map(String));
 
     let stageHtml = '';
@@ -305,5 +304,66 @@ export function openManageStagesModal(projectName, allStages, activeStageIds) {
     });
     
     listContainer.innerHTML = stageHtml;
-    modal.classList.add('active');
+    manageStagesModal.classList.add('active');
+}
+
+export function setupModals(onStatusChange) {
+    const modals = [statusModal, employeeModal, projectModal, addTaskModal, manageMembersModal, stageModal];
+    modals.forEach(modal => {
+        if (!modal) return;
+        
+        const closeBtn = modal.querySelector('.modal-close-btn');
+
+        const closeModal = () => {
+             if (modal.id === 'add-task-modal') {
+                closeAddTaskModal();
+            } else {
+                modal.classList.remove('active');
+                document.body.classList.remove('overflow-hidden');
+            }
+        };
+
+        if (closeBtn) {
+            closeBtn.addEventListener('click', closeModal);
+        }
+
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) {
+                closeModal();
+            }
+
+            if (modal.id === 'status-modal' && e.target.closest('.status-option')) {
+                const selectedOption = e.target.closest('.status-option');
+                const taskId = modal.dataset.currentTaskId;
+                const newStatus = selectedOption.dataset.statusValue;
+                onStatusChange(taskId, newStatus);
+                closeModal();
+            }
+            
+            if (e.target.closest('.modal-select-btn') && modal.id !== 'add-task-modal') {
+                const targetElement = document.getElementById(modal.dataset.targetElementId);
+                if (!targetElement) return;
+
+                if (modal.id === 'employee-modal') {
+                    const selected = [...modal.querySelectorAll('.employee-checkbox:checked')].map(cb => cb.value);
+                    targetElement.querySelector('.task-responsible-view').textContent = selected.join(', ');
+                } else if (modal.id === 'project-modal') {
+                    const selected = modal.querySelector('input[name="project"]:checked');
+                    if (selected) targetElement.querySelector('.task-project-view').textContent = selected.value;
+                } else if (modal.id === 'stage-modal') {
+                    const selected = modal.querySelector('input[name="stage"]:checked');
+                    if (selected) {
+                        const newStageId = selected.value;
+                        const newStageName = store.getStageNameById(newStageId);
+                        targetElement.querySelector('.task-stage-view').textContent = newStageName;
+                        
+                        const taskData = JSON.parse(targetElement.dataset.task);
+                        taskData.stageId = newStageId;
+                        targetElement.dataset.task = JSON.stringify(taskData);
+                    }
+                }
+                closeModal();
+            }
+        });
+    });
 }

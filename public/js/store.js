@@ -69,3 +69,9 @@ export function findTask(taskId) {
 let stageFilters = {};
 export const setStageFilters = (filters) => { stageFilters = filters; };
 export const getStageFilters = () => stageFilters;
+
+export const getStageNameById = (stageId) => {
+    if (!appData.allStages) return null;
+    const stage = appData.allStages.find(s => s.stageId == stageId);
+    return stage ? stage.name : null;
+};
