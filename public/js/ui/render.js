@@ -85,7 +85,7 @@ export function renderProjects(projects, userName, userRole, expandedState = {})
             if (project.tasks.length === 0 && userRole !== 'gap') return;
 
             const projectCard = document.createElement('div');
-            projectCard.className = 'card rounded-xl shadow-md overflow-hidden';
+            projectCard.className = 'project-card card rounded-xl shadow-md overflow-hidden';
             
             const tasksByStatus = project.tasks.reduce((acc, task) => {
                 if (!acc[task.status]) acc[task.status] = [];
