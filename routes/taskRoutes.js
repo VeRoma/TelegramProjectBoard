@@ -99,7 +99,7 @@ router.post('/appdata', async (req, res) => {
 
 router.post('/updatepriorities', async (req, res) => {
     try {
-        const { tasks } = req.body;
+        const { tasks, modifierName } = req.body;
 
         console.log(`[SERVER LOG] Received /updatepriorities request from ${modifierName}.`);
         console.log('[SERVER LOG] Request body:', JSON.stringify(tasks, null, 2));
