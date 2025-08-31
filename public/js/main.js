@@ -28,7 +28,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         const editBtn = event.target.closest('.edit-btn');
-        if (editBtn) {
+        if (editBtn) {      // Кнопка редактирования задачи
             console.log('[MAIN.JS LOG] Click on .edit-btn detected.');
             event.stopPropagation();
             const detailsContainer = editBtn.closest('.task-details');
@@ -36,7 +36,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (currentlyEditing && currentlyEditing !== detailsContainer) {
                 await handlers.handleSaveActiveTask();
             }
-            const backButtonHandler = () => {
+            const backButtonHandler = () => {   // Обработчик для кнопки "назад"
                 uiUtils.exitEditMode(detailsContainer);
                 uiUtils.updateFabButtonUI(false, handlers.handleSaveActiveTask, handlers.handleShowAddTaskModal);
             };

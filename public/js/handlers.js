@@ -10,7 +10,7 @@ export async function handleSaveActiveTask() {
 
     const appData = store.getAppData();
     const responsibleText = activeEditElement.querySelector('.task-responsible-view').textContent;
-    const selectedEmployees = responsibleText ? responsibleText.split(',').map(s => s.trim()).filter(Boolean) : [];
+    const selectedEmployeeNames = responsibleText ? responsibleText.split(',').map(s => s.trim()).filter(Boolean) : [];
     
     const taskId = activeEditElement.closest('[data-task-id]').dataset.taskId;
     const { task: taskInAppData } = store.findTask(taskId);
@@ -20,12 +20,29 @@ export async function handleSaveActiveTask() {
         return;
     }
 
+    const allEmployees = store.getAllEmployees();
+    const responsibleUserIds = allEmployees
+        .filter(emp => selectedEmployeeNames.includes(emp.name))
+        .map(emp => emp.userId);
+
+    const statuses = store.getAllStatuses();
+    const statusName = activeEditElement.querySelector('.task-status-view').textContent;
+    const statusId = (statuses.find(s => s.name === statusName) || {}).statusId;
+
+    const projects = store.getAllProjects();
+    const projectName = activeEditElement.querySelector('.task-project-view').textContent;
+    const project = projects.find(p => p.name === projectName);
+    const projectId = project ? project.projectId : null;
+
     const updatedTask = {
         ...taskInAppData,
         name: activeEditElement.querySelector('.task-name-edit').value,
-        status: activeEditElement.querySelector('.task-status-view').textContent,
-        project: activeEditElement.querySelector('.task-project-view').textContent,
-        responsible: selectedEmployees,
+        status: statusName,
+        statusId: statusId,
+        project: projectName,
+        projectId: projectId,
+        responsible: selectedEmployeeNames.join(', '),
+        responsibleUserIds: responsibleUserIds,
         version: parseInt(activeEditElement.dataset.version, 10),
     };
 
@@ -246,7 +263,7 @@ export function handleSaveNewTaskClick() {
     const statusId = (statuses.find(s => s.name === statusName) || {}).statusId;
 
     const projects = store.getAllProjects();
-    const project = projects.find(p => p.projectName === projectName);
+    const project = projects.find(p => p.name === projectName);
     const projectId = project ? project.projectId : null;
     
     const currentUser = allEmployees.find(u => u.name === appData.userName);

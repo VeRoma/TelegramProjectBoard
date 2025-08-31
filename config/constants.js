@@ -28,7 +28,7 @@ module.exports = {
 
     // Названия колонок для листа "Tasks"
     TASK_COLUMNS: {
-        TASK_ID: 'Task_id',
+        TASK_ID: 'task_id',
         NAME: 'name', // В таблице Tasks это колонка "Name"
         STAGE_ID: 'stage_id',
         PROJECT_ID: 'project_id',

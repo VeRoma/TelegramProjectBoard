@@ -36,6 +36,7 @@ export async function initializeApp() {
             const data = await api.loadAppData({ user });
             
             if (data && data.projects) {
+                console.log('[AUTH.JS LOG] Loaded app data:', data);
                 // Сохраняем все данные в хранилище
                 store.setAppData(data);
                 
