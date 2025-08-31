@@ -124,7 +124,7 @@ export async function handleCreateTask(taskData) {
 export async function handleStatusUpdate(taskId, newStatusName) {
     console.log(`[HANDLERS.JS LOG] handleStatusUpdate received: taskId=${taskId}, newStatusName=${newStatusName}`);
    
-    const appData = store.getAppData();
+    const appData = store.getAppData(); // Получаем текущее состояние приложения из хранилища
     const { task, project } = store.findTask(taskId);
     if (!task || !project) {
         console.error("[HANDLERS.JS ERROR] Task not found in store for ID:", taskId);
@@ -135,7 +135,8 @@ export async function handleStatusUpdate(taskId, newStatusName) {
     const oldStatus = task.status;
     const oldPriority = task.priority;
     
-    const isLimitedView = !['owner', 'admin'].includes(appData.userRole);
+    const isLimitedView = !['owner', 'admin'].includes(appData.userRole);   // Проверяем, ограничен ли вид пользователя
+
     const allTasksForScope = isLimitedView 
         ? appData.projects.flatMap(p => p.tasks)
         : project.tasks;
@@ -146,22 +147,26 @@ export async function handleStatusUpdate(taskId, newStatusName) {
         task.priority = 999;
     } else {
         const tasksInNewGroup = allTasksForScope.filter(t => t.status === newStatusName && t.taskId !== task.taskId);
-        const maxPriority = Math.max(0, ...tasksInNewGroup.map(t => t.priority));
-        task.priority = maxPriority + 1;
+        // Исключаем текущую задачу из подсчёта. Она уже в новой группе
+
+        const maxPriority = Math.max(0, ...tasksInNewGroup.map(t => t.priority));   // Максимальный приоритет в новой группе
+        
+        task.priority = maxPriority + 1;    // Новому статусу присваиваем приоритет на 1 больше максимального в этой группе
     }
-    const tasksInOldGroup = allTasksForScope.filter(t => t.status === oldStatus && t.taskId !== task.taskId);
+    const tasksInOldGroup = allTasksForScope.filter(t => t.status === oldStatus && t.taskId !== task.taskId); // Задачи в старой группе, исключая текущую задачу
     tasksInOldGroup.sort((a, b) => a.priority - b.priority).forEach((t, index) => {
-        t.priority = index + 1;
+        t.priority = index + 1; // Перенумеровываем задачи в старой группе
     });
 
-    const accordionState = uiUtils.getAccordionState();
-    render.renderProjects(appData.projects, appData.userName, appData.userRole, accordionState);
+    const accordionState = uiUtils.getAccordionState(); //
+    render.renderProjects(appData.projects, appData.userName, appData.userRole, accordionState);    // Перерисовываем проекты с учётом изменений
     uiUtils.showMessage('Статус обновлён, идет сохранение...', 'info');
     
-    const statuses = store.getAllStatuses();
+    const statuses = store.getAllStatuses();    // Получаем все статусы из хранилища
+    // Формируем массив задач для обновления на сервере
 
     const tasksToUpdate = [...tasksInOldGroup, task].map(t => {
-        const statusId = (statuses.find(s => s.name === t.status) || {}).statusId;
+        const statusId = (statuses.find(s => s.name === t.status) || {}).statusId;  // Находим ID статуса по имени
         return {
             taskId: t.taskId,
             priority: t.priority,
@@ -181,7 +186,7 @@ export async function handleStatusUpdate(taskId, newStatusName) {
         uiUtils.showMessage('Не удалось сохранить изменения: ' + error.message, 'error');
         task.status = oldStatus;
         task.priority = oldPriority;
-        setTimeout(() => window.location.reload(), 2000);
+        // setTimeout(() => window.location.reload(), 2000);   
     }
 }
 

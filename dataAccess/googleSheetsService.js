@@ -138,17 +138,19 @@ const addTaskToSheet = async (newTaskData, creatorName) => {
 };
 
 const updateTaskPrioritiesInSheet = async (tasksToUpdate) => {
+    console.log('GOOGLE SHEETS SERVICE.JS: updateTaskPrioritiesInSheet called with', tasksToUpdate);
     try {
         const sheet = await getSheet(SHEET_NAMES.TASKS);
         const rows = await sheet.getRows();
+        console.log('GOOGLE SHEETS SERVICE.JS: Retrieved rows:', rows.length);
 
-        const rowMap = new Map();
-        rows.forEach(row => {
+        const rowMap = new Map();  
+        rows.forEach(row => {   //
             rowMap.set(row.get(TASK_COLUMNS.TASK_ID), row);
         });
 
-        const promises = tasksToUpdate.map(task => {
-            const row = rowMap.get(task.taskId);
+        const promises = tasksToUpdate.map(task => {    
+            const row = rowMap.get(task.taskId);    //
             if (row) {
                 if (task.statusId !== undefined) {
                     row.set(TASK_COLUMNS.STATUS_ID, task.statusId);
