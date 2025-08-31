@@ -365,3 +365,60 @@ async function handleSaveMembers(projectId) {
          uiUtils.showMessage(`Ошибка сохранения: ${error.message}`, 'error');
     }
 }
+
+export async function handleManageStages(projectId, projectName) {
+    try {
+        uiUtils.showMessage('Загрузка этапов...', 'info');
+        const allStages = await api.getAllStages();
+        
+        // --- ИЗМЕНЕНИЕ ЗДЕСЬ ---
+        // Берем активные этапы для этого проекта из нашего хранилища
+        const activeStageIds = store.getStageFilters()[projectId] || [];
+        // -------------------------
+        
+        modals.openManageStagesModal(projectName, allStages, activeStageIds);
+        
+        const saveBtn = document.getElementById('save-stages-btn');
+        saveBtn.replaceWith(saveBtn.cloneNode(true));
+        document.getElementById('save-stages-btn').addEventListener('click', () => {
+             handleSaveStages(projectId);
+        });
+
+    } catch (error) {
+        uiUtils.showMessage(`Ошибка: ${error.message}`, 'error');
+    }
+}
+
+async function handleSaveStages(projectId) {
+    const checkedBoxes = document.querySelectorAll('#stages-modal-list .stage-checkbox:checked');
+    const newStageIds = Array.from(checkedBoxes).map(cb => cb.value);
+    
+    try {
+        uiUtils.showMessage('Сохранение...', 'info');
+        const result = await api.updateProjectStages(projectId, { stageIds: newStageIds });
+
+        if (result.status === 'success') {
+            document.getElementById('manage-stages-modal').classList.remove('active');
+            uiUtils.showMessage('Список этапов обновлен!', 'success');
+            
+            // --- НОВАЯ ЛОГИКА ПЕРЕРИСОВКИ ---
+            const appData = store.getAppData();
+            // 1. Получаем все текущие фильтры из хранилища
+            const currentFilters = store.getStageFilters();
+            // 2. Обновляем фильтр для конкретного проекта
+            currentFilters[projectId] = newStageIds;
+            // 3. Сохраняем обновленный объект фильтров обратно в хранилище
+            store.setStageFilters(currentFilters);
+            
+            // 4. Перерисовываем все проекты с учетом полного набора фильтров
+            const accordionState = uiUtils.getAccordionState();
+            render.renderProjects(appData.projects, appData.userName, appData.userRole, accordionState, currentFilters);
+            // --- КОНЕЦ НОВОЙ ЛОГИКИ ---
+
+        } else {
+            throw new Error(result.error || 'Неизвестная ошибка сервера');
+        }
+    } catch (error) {
+         uiUtils.showMessage(`Ошибка сохранения: ${error.message}`, 'error');
+    }
+}

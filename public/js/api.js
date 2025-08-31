@@ -160,3 +160,44 @@ export function updateProjectMembers(projectId, payload) {
         return res.json();
     });
 }
+
+/**
+ * Запрашивает с сервера полный список всех этапов.
+ * @returns {Promise<object[]>}
+ */
+export function getAllStages() {
+    return fetch('/api/stages').then(res => {
+        if (!res.ok) throw new Error('Ошибка при загрузке списка этапов');
+        return res.json();
+    });
+}
+
+/**
+ * Обновляет список активных этапов для проекта.
+ * @param {string} projectId ID проекта.
+ * @param {object} payload Объект с массивом stageIds.
+ * @returns {Promise<object>}
+ */
+export function updateProjectStages(projectId, payload) {
+    return fetch(`/api/project/${projectId}/stages`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+    }).then(res => {
+        if (!res.ok) throw new Error('Ошибка при сохранении этапов проекта');
+        return res.json();
+    });
+}
+
+/**
+ * Запрашивает список ID активных этапов для конкретного проекта.
+ * @param {string} projectId ID проекта.
+ * @returns {Promise<string[]>}
+ */
+export function getProjectStages(projectId) {
+    return fetch(`/api/project/${projectId}/stages`)
+        .then(res => {
+            if (!res.ok) throw new Error('Ошибка при загрузке активных этапов проекта');
+            return res.json();
+        });
+}

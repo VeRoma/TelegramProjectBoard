@@ -103,6 +103,16 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
+        const manageStagesBtn = event.target.closest('.manage-stages-btn');
+        if (manageStagesBtn) {
+            console.log('[MAIN.JS LOG] Click on .manage-stages-btn detected.');
+            event.stopPropagation();
+            const projectId = manageStagesBtn.dataset.projectId;
+            const projectName = manageStagesBtn.dataset.projectName;
+            handlers.handleManageStages(projectId, projectName);
+            return;
+        }
+
         const projectHeader = event.target.closest('.project-header');
         if (projectHeader) {
             console.log('[MAIN.JS LOG] Final Fix: Click on .project-header detected.');

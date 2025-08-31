@@ -17,6 +17,8 @@ router.post('/appdata', async (req, res) => {
         const allStatuses = await googleSheetsService.getAllStatuses();
         let allProjects = await googleSheetsService.getAllProjects();
         let allTasks = await googleSheetsService.getTasks();
+        // Загружаем активные фильтры по этапам
+        const activeProjectStages = await googleSheetsService.getActiveProjectStages();
         
         const currentUser = allUsers.find(u => u.tgUserId == user.id);
         if (!currentUser) {
@@ -25,25 +27,18 @@ router.post('/appdata', async (req, res) => {
 
         const { name: userName, role: userRole, userId: currentInternalUserId } = currentUser;
         
-        // --- НОВАЯ ЛОГИКА ФИЛЬТРАЦИИ ---
-        if (userRole !== 'admin' && userRole !== 'owner') {
-            // 1. Получаем ID проектов, в которых состоит пользователь
-            const userProjectIds = await googleSheetsService.getProjectIdsByUserId(currentInternalUserId);
+        // --- Старый жесткий фильтр УДАЛЕН ---
 
-            // 2. Фильтруем проекты
+        if (userRole !== 'admin' && userRole !== 'owner') {
+            const userProjectIds = await googleSheetsService.getProjectIdsByUserId(currentInternalUserId);
             allProjects = allProjects.filter(p => userProjectIds.includes(p.projectId));
-            
-            // 3. Фильтруем задачи, оставляя только те, что принадлежат доступным проектам
             const userProjectIdsSet = new Set(userProjectIds);
             allTasks = allTasks.filter(task => userProjectIdsSet.has(task.get(TASK_COLUMNS.PROJECT_ID)));
         }
-        // --- КОНЕЦ НОВОЙ ЛОГИКИ ---
-
-        // Остальная часть кода остается почти без изменений
+        
         const allMembers = await googleSheetsService.getAllMembers();
         let tasksToProcess = [];
 
-        // Логика определения видимых задач (для админа/овнера - все, для юзера - только его)
         if (userRole === 'admin' || userRole === 'owner') {
             tasksToProcess = allTasks;
         } else {
@@ -62,14 +57,11 @@ router.post('/appdata', async (req, res) => {
             const projectId = task.get(TASK_COLUMNS.PROJECT_ID) || '1';
             const statusId = task.get(TASK_COLUMNS.STATUS_ID) || '1';
             const priority = parseInt(task.get(TASK_COLUMNS.PRIORITY), 10) || 1;
-
             const project = allProjects.find(p => p.projectId == projectId);
             const status = allStatuses.find(s => s.statusId == statusId);
-            
             const taskId = task.get(TASK_COLUMNS.TASK_ID);
             const memberUserIds = allMembers.filter(m => m.taskId === taskId).map(m => m.userId);
             const mainAssigneeId = task.get(TASK_COLUMNS.USER_ID);
-            
             const responsibleIds = new Set([mainAssigneeId, ...memberUserIds].filter(Boolean));
             const responsibleNames = [...responsibleIds].map(id => allUsers.find(u => u.userId === id)?.name).filter(Boolean);
 
@@ -82,7 +74,8 @@ router.post('/appdata', async (req, res) => {
                 project: project ? project.projectName : 'Без проекта',
                 projectId: projectId,
                 priority: priority,
-                version: parseInt(task.get(TASK_COLUMNS.VERSION) || 0, 10)
+                version: parseInt(task.get(TASK_COLUMNS.VERSION) || 0, 10),
+                stageId: task.get(TASK_COLUMNS.STAGE_ID) // <-- ВАЖНОЕ ИЗМЕНЕНИЕ
             };
         });
 
@@ -91,8 +84,7 @@ router.post('/appdata', async (req, res) => {
         const groups = {};
         enrichedTasks.forEach(task => {
             const project = allProjects.find(p => p.projectId === task.projectId);
-            if (!project) return; // Если задача относится к отфильтрованному проекту, пропускаем
-
+            if (!project) return;
             const groupName = project.projectName;
             if (!groups[groupName]) {
                 groups[groupName] = { name: groupName, tasks: [] };
@@ -106,7 +98,8 @@ router.post('/appdata', async (req, res) => {
             userName, 
             userRole,
             allEmployees: allUsers,
-            allStatuses: allStatuses
+            allStatuses: allStatuses,
+            activeProjectStages: activeProjectStages // Передаем фильтры клиенту
         });
 
     } catch (error) {
@@ -118,24 +111,11 @@ router.post('/appdata', async (req, res) => {
 router.post('/updatepriorities', async (req, res) => {
     try {
         const { tasks, modifierName } = req.body;
-
-        console.log(`[SERVER LOG] Received /updatepriorities request from ${modifierName}.`);
-        console.log('[SERVER LOG] Request body:', JSON.stringify(tasks, null, 2));
-
-
         if (!tasks || !Array.isArray(tasks) || tasks.length === 0) {
-            console.error('[SERVER ERROR] Invalid tasks data provided.');
-            
             return res.status(400).json({ error: 'Invalid tasks data provided.' });
         }
-        
         await googleSheetsService.updateTaskPrioritiesInSheet(tasks);
-
-        console.log('[SERVER LOG] Priorities updated successfully in Google Sheets.');
-        
-
         res.status(200).json({ status: 'success', message: 'Priorities updated successfully.' });
-
     } catch (error) {
         console.error('[SERVER ERROR] in /api/updatepriorities:', error);
         res.status(500).json({ error: error.message });
@@ -149,25 +129,16 @@ router.post('/addtask', async (req, res) => {
             return res.status(400).json({ error: 'New task data is required.' });
         }
         const addedRows = await googleSheetsService.addTaskToSheet(newTaskData, creatorName);
-        
-        // Преобразуем ответ в тот же формат, что и при загрузке
         const createdTaskData = addedRows[0].toObject();
         const createdTask = {
             taskId: createdTaskData[TASK_COLUMNS.TASK_ID],
             name: createdTaskData[TASK_COLUMNS.NAME],
-            // здесь можно добавить "обогащение" задачи, если нужно
         };
-
         res.status(201).json({ status: 'success', tasks: [createdTask] });
     } catch (error) {
         console.error('[SERVER ERROR] in /api/addtask:', error);
         res.status(500).json({ error: error.message });
     }
-});
-
-router.post('/updatetask', async (req, res) => {
-    // Эта функция пока остается заглушкой, но готова к реализации
-    res.status(501).json({ error: 'Not implemented yet' });
 });
 
 router.post('/deletetask', async (req, res) => {
@@ -176,14 +147,8 @@ router.post('/deletetask', async (req, res) => {
         if (!taskId) {
             return res.status(400).json({ error: 'Task ID is required.' });
         }
-
-        console.log(`[SERVER LOG] Received /deletetask request for task ${taskId} from ${modifierName}.`);
-        
-        // Здесь мы будем вызывать новую функцию из googleSheetsService
         await googleSheetsService.archiveTaskInSheet(taskId, modifierName);
-
         res.status(200).json({ status: 'success', message: 'Task archived successfully.' });
-
     } catch (error) {
         console.error('[SERVER ERROR] in /api/deletetask:', error);
         res.status(500).json({ error: error.message });
@@ -201,21 +166,54 @@ router.get('/project/:projectId/members', async (req, res) => {
     }
 });
 
-// POST-маршрут для обновления участников
 router.post('/project/:projectId/members', async (req, res) => {
     try {
         const { projectId } = req.params;
         const { memberIds, modifierName } = req.body;
-
         if (!Array.isArray(memberIds)) {
             return res.status(400).json({ error: 'memberIds should be an array.' });
         }
-
         await googleSheetsService.updateProjectMembersInSheet(projectId, memberIds, modifierName);
         res.status(200).json({ status: 'success' });
-
     } catch (error) {
         console.error(`[SERVER ERROR] POST /api/project/members:`, error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// --- МАРШРУТЫ ДЛЯ ЭТАПОВ ---
+router.get('/stages', async (req, res) => {
+    try {
+        const allStages = await googleSheetsService.getAllStages();
+        res.status(200).json(allStages);
+    } catch (error) {
+        console.error(`[SERVER ERROR] GET /api/stages:`, error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+router.get('/project/:projectId/stages', async (req, res) => {
+    try {
+        const { projectId } = req.params;
+        const activeStageIds = await googleSheetsService.getActiveStageIdsByProjectId(projectId);
+        res.status(200).json(activeStageIds);
+    } catch (error) {
+        console.error(`[SERVER ERROR] GET /api/project/stages:`, error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+router.post('/project/:projectId/stages', async (req, res) => {
+    try {
+        const { projectId } = req.params;
+        const { stageIds } = req.body;
+        if (!Array.isArray(stageIds)) {
+            return res.status(400).json({ error: 'stageIds should be an array.' });
+        }
+        await googleSheetsService.updateProjectStages(projectId, stageIds);
+        res.status(200).json({ status: 'success' });
+    } catch (error) {
+        console.error(`[SERVER ERROR] POST /api/project/stages:`, error);
         res.status(500).json({ error: error.message });
     }
 });

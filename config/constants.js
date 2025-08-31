@@ -8,7 +8,8 @@ module.exports = {
         PROJECTS: 'Projects',
         USERS: 'Users',
         MEMBERS: 'Members', // Участники конкретных задач
-        PROJECT_MEMBERS: 'ProjectMembers', // Участники конкретных проектов
+        PROJECT_MEMBERS: 'ProjectMembers', // Участники для конкретного проекта
+        PROJECT_STAGES: 'ProjectStages', // Этапы для конкретного проекта
         PROJECT_ROLES: 'ProjectRoles', // Роли участников в проектах
         STATUSES: 'Statuses',
         STAGES: 'Stages',
@@ -39,9 +40,7 @@ module.exports = {
         VERSION: 'version', // Для контроля версий при обновлении задач
         START_DATE: 'start_date',
         FINISH_DATE: 'finish_date',
-        // Технические поля, которые мы используем
-
-        // ROW_INDEX: 'row_index' // Физический номер строки для быстрых обновлений
+        IS_DELETED: 'is_deleted',
     },
 
     // Названия колонок для листа "Users"
@@ -76,16 +75,42 @@ module.exports = {
         ORDER: 'order',
     },
     // Названия колонок для листа "ProjectMembers" (участники проектов)
-    // колонки: project_member_id	project_id	user_id	project_role_id	date_added	is_active 
+    
     PROJECT_MEMBERS_COLUMNS: {
         PROJECT_MEMBER_ID: 'project_member_id',
         PROJECT_ID: 'project_id',
         USER_ID: 'user_id',
         PROJECT_ROLE_ID: 'project_role_id',
-        DATE_ADDED: 'date_added',
         IS_ACTIVE: 'is_active',
     },
     
+    STAGES_COLUMNS: {
+        STAGE_ID: 'stage_id',
+        NAME: 'name',
+    },
+
+    // Названия колонок для листа "ActivityLog"
+    //columns: log_id	entity_type	entity_id	activity_type	details	user_id	timestamp
+    LOG_COLUMNS: {
+        LOG_ID: 'log_id',
+        ENTITY_TYPE: 'entity_type',
+        ENTITY_ID: 'entity_id',
+        ACTIVITY_TYPE: 'activity_type',
+        DETAILS: 'details',
+        USER_ID: 'user_id',
+        TIMESTAMP: 'timestamp',
+    },
+
+
+    
+    PROJECT_STAGES_COLUMNS: {
+        PROJECT_STAGE_ID: 'project_stage_id',
+        PROJECT_ID: 'project_id',
+        STAGE_ID: 'stage_id',
+        IS_ACTIVE: 'is_active',
+    },
+    
+
 
     // Шаблоны сообщений для Telegram бота
     TELEGRAM_MESSAGES: {

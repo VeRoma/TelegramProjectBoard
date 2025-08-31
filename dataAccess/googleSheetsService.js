@@ -1,6 +1,18 @@
 const { GoogleSpreadsheet } = require('google-spreadsheet');
 const { JWT } = require('google-auth-library');
-const { SHEET_NAMES, TASK_COLUMNS, USER_COLUMNS, PROJECT_COLUMNS, MEMBER_COLUMNS, STATUS_COLUMNS, ERROR_MESSAGES } = require('../config/constants');
+const { 
+    SHEET_NAMES, 
+    TASK_COLUMNS, 
+    USER_COLUMNS, 
+    PROJECT_COLUMNS, 
+    MEMBER_COLUMNS, 
+    STATUS_COLUMNS,
+    PROJECT_MEMBERS_COLUMNS,
+    PROJECT_STAGES_COLUMNS,
+    STAGES_COLUMNS,
+    LOG_COLUMNS,
+    ERROR_MESSAGES 
+} = require('../config/constants');
 
 const serviceAccountAuth = new JWT({
     email: process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL,
@@ -78,12 +90,11 @@ const getAllStatuses = async () => {
     }));
 };
 
-// --- ИЗМЕНЕНИЕ №1: Фильтрация удаленных задач ---
+
 const getTasks = async () => {
     const tasksSheet = await getSheet(SHEET_NAMES.TASKS);
     const rows = await tasksSheet.getRows();
-    // Фильтруем задачи, чтобы не получать те, у которых is_deleted = TRUE
-    return rows.filter(row => row.get('is_deleted') !== 'TRUE');
+    return rows.filter(row => row.get(TASK_COLUMNS.IS_DELETED) !== 'TRUE');
 };
 
 const getEmployeeById = async (tgUserId) => {
@@ -134,7 +145,7 @@ const addTaskToSheet = async (newTaskData, creatorName) => {
         [TASK_COLUMNS.PRIORITY]: newTaskData.priority,
         [TASK_COLUMNS.VERSION]: 0,
         [TASK_COLUMNS.AUTHOR_USER_ID]: newTaskData.creatorId,
-        'is_deleted': 'FALSE' // Явно указываем при создании
+        [TASK_COLUMNS.IS_DELETED]: 'FALSE'
     };
 
     const addedRow = await tasksSheet.addRow(newRowData);
@@ -173,7 +184,6 @@ const updateTaskPrioritiesInSheet = async (tasksToUpdate) => {
     }
 };
 
-// --- ИЗМЕНЕНИЕ №2: Новая функция для "мягкого" удаления ---
 const archiveTaskInSheet = async (taskId, modifierName) => {
     try {
         const tasksSheet = await getSheet(SHEET_NAMES.TASKS);
@@ -181,14 +191,7 @@ const archiveTaskInSheet = async (taskId, modifierName) => {
         const taskRow = rows.find(row => row.get(TASK_COLUMNS.TASK_ID) == taskId);
 
         if (taskRow) {
-            // Устанавливаем флаг удаления
-            taskRow.set('is_deleted', 'TRUE'); 
-            
-            // Опционально: можно добавить столбцы 'deleted_by' и 'deleted_at' в вашу таблицу
-            // и раскомментировать эти строки для логирования
-            // taskRow.set('deleted_by', modifierName);
-            // taskRow.set('deleted_at', new Date().toISOString());
-            
+            taskRow.set(TASK_COLUMNS.IS_DELETED, 'TRUE');
             await taskRow.save();
             return { success: true };
         } else {
@@ -205,15 +208,14 @@ const logUserAccess = async (user) => {
     const logSheet = doc.sheetsByTitle[SHEET_NAMES.LOGS];
     if (!logSheet) return;
     await logSheet.addRow({
-        Timestamp: new Date().toISOString(),
-        UserID: user.id,
-        Username: user.username || '',
-        Name: user.first_name || 'N/A'
+        [LOG_COLUMNS.TIMESTAMP]: new Date().toISOString(),
+        [LOG_COLUMNS.USER_ID]: user.id,
+        [LOG_COLUMNS.USERNAME]: user.username || '',
+        [LOG_COLUMNS.NAME]: user.first_name || 'N/A'
     });
 };
 
 const getProjectIdsByUserId = async (userId) => {
-    // Убедитесь, что в constants.js у вас есть SHEET_NAMES.PROJECT_MEMBERS
     const sheet = await getSheet(SHEET_NAMES.PROJECT_MEMBERS);
     if (!sheet) return [];
     
@@ -221,9 +223,8 @@ const getProjectIdsByUserId = async (userId) => {
     const projectIds = new Set();
     
     rows.forEach(row => {
-        // Убедитесь, что названия столбцов соответствуют вашей таблице
-        if (row.get('user_id') == userId && row.get('is_active') === 'TRUE') {
-            projectIds.add(row.get('project_id'));
+        if (row.get(PROJECT_MEMBERS_COLUMNS.USER_ID) == userId && row.get(PROJECT_MEMBERS_COLUMNS.IS_ACTIVE) === 'TRUE') {
+            projectIds.add(row.get(PROJECT_MEMBERS_COLUMNS.PROJECT_ID));
         }
     });
 
@@ -238,39 +239,47 @@ const getMemberIdsByProjectId = async (projectId) => {
     const memberIds = new Set();
     
     rows.forEach(row => {
-        // Убедитесь, что названия столбцов соответствуют вашей таблице
-        if (row.get('project_id') == projectId && row.get('is_active') === 'TRUE') {
-            memberIds.add(row.get('user_id'));
+        if (row.get(PROJECT_MEMBERS_COLUMNS.PROJECT_ID) == projectId && row.get(PROJECT_MEMBERS_COLUMNS.IS_ACTIVE) === 'TRUE') {
+            memberIds.add(row.get(PROJECT_MEMBERS_COLUMNS.USER_ID));
         }
     });
 
     return Array.from(memberIds);
 };
 
-// 2. Добавьте эту функцию для обновления списка участников
+
+
+const getAllStages = async () => {
+    const sheet = await getSheet(SHEET_NAMES.STAGES);
+    const rows = await sheet.getRows();
+    return rows.map(row => ({
+        stageId: row.get(STAGES_COLUMNS.STAGE_ID),
+        name: row.get(STAGES_COLUMNS.NAME),
+    }));
+};
+
+// 1. ИСПРАВЛЕННАЯ функция для УЧАСТНИКОВ (удалено date_added)
 const updateProjectMembersInSheet = async (projectId, newMemberIds, modifierName) => {
     const sheet = await getSheet(SHEET_NAMES.PROJECT_MEMBERS);
     const rows = await sheet.getRows();
-    const existingMembers = rows.filter(row => row.get('project_id') == projectId);
+    const existingMembers = rows.filter(row => row.get(PROJECT_MEMBERS_COLUMNS.PROJECT_ID) == projectId);
 
-    const existingMemberIds = new Set(existingMembers.map(row => row.get('user_id')));
+    const existingMemberIds = new Set(existingMembers.map(row => row.get(PROJECT_MEMBERS_COLUMNS.USER_ID)));
     const newMemberIdsSet = new Set(newMemberIds);
 
-    const toDeactivate = existingMembers.filter(row => !newMemberIdsSet.has(row.get('user_id')));
+    const toDeactivate = existingMembers.filter(row => !newMemberIdsSet.has(row.get(PROJECT_MEMBERS_COLUMNS.USER_ID)));
     const toAdd = newMemberIds.filter(id => !existingMemberIds.has(id));
 
-    // Деактивируем старых
     for (const row of toDeactivate) {
-        row.set('is_active', 'FALSE');
+        row.set(PROJECT_MEMBERS_COLUMNS.IS_ACTIVE, 'FALSE');
         await row.save();
     }
 
-    // Добавляем новых
     const newRows = toAdd.map(userId => ({
-        'project_id': projectId,
-        'user_id': userId,
-        'is_active': 'TRUE',
-        'date_added': new Date().toISOString()
+        [PROJECT_MEMBERS_COLUMNS.PROJECT_ID]: projectId,
+        [PROJECT_MEMBERS_COLUMNS.USER_ID]: userId,
+        [PROJECT_MEMBERS_COLUMNS.IS_ACTIVE]: 'TRUE'
+        // Поле date_added удалено
     }));
 
     if (newRows.length > 0) {
@@ -280,7 +289,65 @@ const updateProjectMembersInSheet = async (projectId, newMemberIds, modifierName
     return { success: true };
 };
 
-// --- ИЗМЕНЕНИЕ №3: Экспортируем новую функцию ---
+
+// 2. ИСПРАВЛЕННАЯ функция для ЭТАПОВ (удалено date_added, добавлено is_active)
+const updateProjectStages = async (projectId, stageIds) => {
+    const sheet = await getSheet(SHEET_NAMES.PROJECT_STAGES);
+    const rows = await sheet.getRows();
+
+    // Находим и удаляем старые записи для этого проекта
+    const rowsToDelete = rows.filter(row => row.get(PROJECT_STAGES_COLUMNS.PROJECT_ID) == projectId);
+    for (const row of rowsToDelete) {
+        await row.delete();
+    }
+
+    // Добавляем новые записи
+    if (stageIds && stageIds.length > 0) {
+        const newRows = stageIds.map(stageId => ({
+            [PROJECT_STAGES_COLUMNS.PROJECT_ID]: projectId,
+            [PROJECT_STAGES_COLUMNS.STAGE_ID]: stageId,
+            [PROJECT_STAGES_COLUMNS.IS_ACTIVE]: 'TRUE' // Поле is_active добавлено
+            // Поле date_added удалено
+        }));
+        await sheet.addRows(newRows);
+    }
+    
+    return { success: true };
+};
+
+const getActiveStageIdsByProjectId = async (projectId) => {
+    const sheet = await getSheet(SHEET_NAMES.PROJECT_STAGES);
+    const rows = await sheet.getRows();
+    const activeIds = new Set();
+    
+    rows.forEach(row => {
+        if (row.get(PROJECT_STAGES_COLUMNS.PROJECT_ID) == projectId && row.get(PROJECT_STAGES_COLUMNS.IS_ACTIVE) === 'TRUE') {
+            activeIds.add(row.get(PROJECT_STAGES_COLUMNS.STAGE_ID));
+        }
+    });
+
+    return Array.from(activeIds);
+};
+
+const getActiveProjectStages = async () => {
+    const sheet = await getSheet(SHEET_NAMES.PROJECT_STAGES);
+    const rows = await sheet.getRows();
+    const projectStages = {};
+    
+    rows.forEach(row => {
+        // Проверяем, что is_active равно TRUE
+        if (row.get(PROJECT_STAGES_COLUMNS.IS_ACTIVE) === 'TRUE') {
+            const projectId = row.get(PROJECT_STAGES_COLUMNS.PROJECT_ID);
+            const stageId = row.get(PROJECT_STAGES_COLUMNS.STAGE_ID);
+            if (!projectStages[projectId]) {
+                projectStages[projectId] = [];
+            }
+            projectStages[projectId].push(stageId);
+        }
+    });
+    return projectStages;
+};
+
 module.exports = {
     loadSheetDataMiddleware,
     getSheet,
@@ -300,5 +367,10 @@ module.exports = {
     updateProjectMembersInSheet,
     logUserAccess,
     doc,
-    getAllEmployees: getAllUsers
+    getAllEmployees: getAllUsers,
+    getAllStages,
+    updateProjectStages,
+    getActiveStageIdsByProjectId,
+    getActiveProjectStages,
+
 };

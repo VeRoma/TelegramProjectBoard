@@ -282,3 +282,28 @@ export function openManageMembersModal(projectName, allUsers, currentMemberIds) 
     listContainer.innerHTML = userHtml;
     modal.classList.add('active');
 }
+
+export function openManageStagesModal(projectName, allStages, activeStageIds) {
+    const modal = document.getElementById('manage-stages-modal');
+    const listContainer = document.getElementById('stages-modal-list');
+    const projectNameEl = document.getElementById('stages-modal-project-name');
+
+    projectNameEl.textContent = projectName;
+    
+    // Превращаем массив ID в Set для быстрой проверки
+    const activeStageIdsSet = new Set(activeStageIds.map(String));
+
+    let stageHtml = '';
+    allStages.forEach(stage => {
+        const isChecked = activeStageIdsSet.has(String(stage.stageId));
+        stageHtml += `
+            <label class="flex items-center p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 cursor-pointer">
+                <input type="checkbox" class="stage-checkbox h-5 w-5 rounded mr-3" value="${stage.stageId}" ${isChecked ? 'checked' : ''}>
+                <span class="text-lg">${stage.name}</span>
+            </label>
+        `;
+    });
+    
+    listContainer.innerHTML = stageHtml;
+    modal.classList.add('active');
+}

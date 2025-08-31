@@ -65,3 +65,7 @@ export function findTask(taskId) {
     }
     return { task: null, project: null };
 }
+
+let stageFilters = {};
+export const setStageFilters = (filters) => { stageFilters = filters; };
+export const getStageFilters = () => stageFilters;

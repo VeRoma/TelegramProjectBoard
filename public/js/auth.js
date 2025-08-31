@@ -40,10 +40,26 @@ export async function initializeApp() {
                 // Сохраняем все данные в хранилище
                 store.setAppData(data);
                 
-                // Просто рендерим проекты. Все data-атрибуты уже будут на месте.
-                render.renderProjects(data.projects, data.userName, data.userRole);
-                
-                // --- УДАЛЕН ИЗБЫТОЧНЫЙ БЛОК forEach ---
+                // --- НОВЫЙ КОД ДЛЯ ФИЛЬТРОВ ---
+                    // 1. Получаем сохраненные фильтры с сервера
+                    const stageFilters = data.activeProjectStages || {};
+                    
+                    // 2. Устанавливаем фильтр по умолчанию ('2') для проектов, у которых нет сохраненных фильтров
+                    if (data.allProjects) {
+                        data.allProjects.forEach(p => {
+                            if (!stageFilters[p.projectId]) {
+                                stageFilters[p.projectId] = ['2'];
+                            }
+                        });
+                    }
+                    
+                    // 3. Сохраняем итоговые фильтры в хранилище
+                    store.setStageFilters(stageFilters);
+                    // --- КОНЕЦ НОВОГО КОДА ---
+                    
+                    // 4. Рендерим проекты, передавая в функцию фильтры из хранилища
+                    render.renderProjects(data.projects, data.userName, data.userRole, {}, store.getStageFilters());
+                    
 
                 return true; // Возвращаем true в случае успеха
             } else {
