@@ -248,7 +248,21 @@ const getMemberIdsByProjectId = async (projectId) => {
     return Array.from(memberIds);
 };
 
-
+const getAllTaskMembers = async () => {
+    const sheet = await getSheet(SHEET_NAMES.TASK_MEMBERS); // Используем новое имя листа
+    if (!sheet) {
+        console.warn(`[WARN] Sheet "${SHEET_NAMES.TASK_MEMBERS}" not found. Task member functionality will be disabled.`);
+        return [];
+    }
+    const rows = await sheet.getRows();
+    return rows.map(row => ({
+        taskMemberId: row.get(TASK_MEMBERS_COLUMNS.TASK_MEMBER_ID),
+        taskId: row.get(TASK_MEMBERS_COLUMNS.TASK_ID),
+        userId: row.get(TASK_MEMBERS_COLUMNS.USER_ID),
+        statusId: row.get(TASK_MEMBERS_COLUMNS.STATUS_ID),
+        priority: row.get(TASK_MEMBERS_COLUMNS.PRIORITY)
+    }));
+};
 
 const getAllStages = async () => {
     const sheet = await getSheet(SHEET_NAMES.STAGES);
@@ -373,5 +387,6 @@ module.exports = {
     updateProjectStages,
     getActiveStageIdsByProjectId,
     getActiveProjectStages,
+    getAllTaskMembers
 
 };

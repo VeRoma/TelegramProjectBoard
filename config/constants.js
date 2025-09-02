@@ -7,7 +7,7 @@ module.exports = {
         TASKS: 'Tasks',
         PROJECTS: 'Projects',
         USERS: 'Users',
-        MEMBERS: 'Members', // Участники конкретных задач
+        TASK_MEMBERS: 'TaskMembers', // Участники конкретных задач
         PROJECT_MEMBERS: 'ProjectMembers', // Участники для конкретного проекта
         PROJECT_STAGES: 'ProjectStages', // Этапы для конкретного проекта
         PROJECT_ROLES: 'ProjectRoles', // Роли участников в проектах
@@ -58,9 +58,9 @@ module.exports = {
         DESCRIPTION: 'description',
     },
     
-    // Названия колонок для листа "Members" (дополнительные участники задачи)
-    MEMBER_COLUMNS: {
-        MEMBER_ID: 'member_id',
+    // Названия колонок для листа "TaskMembers" (дополнительные участники задачи)
+    TASK_MEMBER_COLUMNS: {
+        TASK_MEMBER_ID: 'task_member_id',
         TASK_ID: 'task_id',
         USER_ID: 'user_id',
         STATUS_ID: 'status_id',

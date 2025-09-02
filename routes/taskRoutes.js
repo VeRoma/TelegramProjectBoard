@@ -12,14 +12,24 @@ router.post('/appdata', async (req, res) => {
             return res.status(400).json({ error: ERROR_MESSAGES.USER_OBJECT_REQUIRED });
         }
 
-        // Загружаем все справочники один раз
-        const allUsers = await googleSheetsService.getAllUsers();
-        const allStatuses = await googleSheetsService.getAllStatuses();
-        const allStages = await googleSheetsService.getAllStages();
-        let allProjects = await googleSheetsService.getAllProjects();
-        let allTasks = await googleSheetsService.getTasks();
-        // Загружаем активные фильтры по этапам
-        const activeProjectStages = await googleSheetsService.getActiveProjectStages();
+        // --- ИЗМЕНЕНИЕ №1: Загружаем данные об исполнителях задач ---
+        const [
+            allUsers, 
+            allStatuses, 
+            allStages, 
+            allProjects, 
+            allTasks, 
+            activeProjectStages, 
+            allTaskMembers // <-- ДОБАВЛЕНО
+        ] = await Promise.all([
+            googleSheetsService.getAllUsers(),
+            googleSheetsService.getAllStatuses(),
+            googleSheetsService.getAllStages(),
+            googleSheetsService.getAllProjects(),
+            googleSheetsService.getTasks(),
+            googleSheetsService.getActiveProjectStages(),
+            googleSheetsService.getAllTaskMembers() // <-- ДОБАВЛЕНО
+        ]);
         
         const currentUser = allUsers.find(u => u.tgUserId == user.id);
         if (!currentUser) {
@@ -28,59 +38,67 @@ router.post('/appdata', async (req, res) => {
 
         const { name: userName, role: userRole, userId: currentInternalUserId } = currentUser;
         
-        // --- Старый жесткий фильтр УДАЛЕН ---
+        // --- ИЗМЕНЕНИЕ №2: Группируем исполнителей по ID задачи для быстрого доступа ---
+        const taskMembersByTaskId = allTaskMembers.reduce((acc, member) => {
+            if (!acc[member.taskId]) {
+                acc[member.taskId] = [];
+            }
+            acc[member.taskId].push(member);
+            return acc;
+        }, {});
+
+
+        let filteredProjects = allProjects;
+        let filteredTasks = allTasks;
 
         if (userRole !== 'admin' && userRole !== 'owner') {
             const userProjectIds = await googleSheetsService.getProjectIdsByUserId(currentInternalUserId);
-            allProjects = allProjects.filter(p => userProjectIds.includes(p.projectId));
+            filteredProjects = allProjects.filter(p => userProjectIds.includes(p.projectId));
             const userProjectIdsSet = new Set(userProjectIds);
-            allTasks = allTasks.filter(task => userProjectIdsSet.has(task.get(TASK_COLUMNS.PROJECT_ID)));
+            filteredTasks = allTasks.filter(task => userProjectIdsSet.has(task.get(TASK_COLUMNS.PROJECT_ID)));
         }
         
-        const allMembers = await googleSheetsService.getAllMembers();
         let tasksToProcess = [];
-
         if (userRole === 'admin' || userRole === 'owner') {
-            tasksToProcess = allTasks;
+            tasksToProcess = filteredTasks;
         } else {
-             tasksToProcess = allTasks.filter(task => {
+            // Эта логика может потребовать пересмотра, когда мы будем определять видимость по TaskMembers
+            tasksToProcess = filteredTasks.filter(task => {
                 const mainAssigneeId = task.get(TASK_COLUMNS.USER_ID);
                 if (mainAssigneeId == currentInternalUserId) return true;
                 const taskId = task.get(TASK_COLUMNS.TASK_ID);
-                const taskMembers = allMembers.filter(m => m.taskId === taskId).map(m => m.userId);
-                return taskMembers.includes(currentInternalUserId);
+                return (taskMembersByTaskId[taskId] || []).some(m => m.userId == currentInternalUserId);
             });
         }
 
         const validTasks = tasksToProcess.filter(row => row.get(TASK_COLUMNS.NAME));
         
         const enrichedTasks = validTasks.map(task => {
+            const taskId = task.get(TASK_COLUMNS.TASK_ID);
             const projectId = task.get(TASK_COLUMNS.PROJECT_ID) || '1';
             const statusId = task.get(TASK_COLUMNS.STATUS_ID) || '1';
-            const priority = parseInt(task.get(TASK_COLUMNS.PRIORITY), 10) || 1;
+
             const project = allProjects.find(p => p.projectId == projectId);
             const status = allStatuses.find(s => s.statusId == statusId);
-            const taskId = task.get(TASK_COLUMNS.TASK_ID);
-            const memberUserIds = allMembers.filter(m => m.taskId === taskId).map(m => m.userId);
             const mainAssigneeId = task.get(TASK_COLUMNS.USER_ID);
-            const responsibleIds = new Set([mainAssigneeId, ...memberUserIds].filter(Boolean));
-            const responsibleNames = [...responsibleIds].map(id => allUsers.find(u => u.userId === id)?.name).filter(Boolean);
+            const curator = allUsers.find(u => u.userId === mainAssigneeId);
 
             return {
                 taskId: taskId,
                 name: task.get(TASK_COLUMNS.NAME),
                 status: status ? status.name : 'Неизвестный статус',
                 statusId: statusId,
-                responsible: responsibleNames.join(', '),
+                curator: curator ? curator.name : 'Не назначен', // <-- Куратор
                 project: project ? project.projectName : 'Без проекта',
                 projectId: projectId,
-                priority: priority,
+                priority: parseInt(task.get(TASK_COLUMNS.PRIORITY), 10) || 1,
                 version: parseInt(task.get(TASK_COLUMNS.VERSION) || 0, 10),
-                stageId: task.get(TASK_COLUMNS.STAGE_ID) // <-- ВАЖНОЕ ИЗМЕНЕНИЕ
+                stageId: task.get(TASK_COLUMNS.STAGE_ID),
+                members: taskMembersByTaskId[taskId] || [] // <-- ИСПОЛНИТЕЛИ ЗАДАЧИ
             };
         });
 
-        console.log(`[SERVER LOG] Sending initial app data to user: ${userName}. Project count: ${allProjects.length}. Task count: ${enrichedTasks.length}`);
+        console.log(`[SERVER LOG] Sending initial app data to user: ${userName}. Project count: ${filteredProjects.length}. Task count: ${enrichedTasks.length}`);
 
         const groups = {};
         enrichedTasks.forEach(task => {
@@ -101,7 +119,7 @@ router.post('/appdata', async (req, res) => {
             allEmployees: allUsers,
             allStatuses: allStatuses,
             allStages: allStages,
-            activeProjectStages: activeProjectStages // Передаем фильтры клиенту
+            activeProjectStages: activeProjectStages
         });
 
     } catch (error) {
