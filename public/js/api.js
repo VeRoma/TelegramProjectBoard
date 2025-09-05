@@ -201,3 +201,25 @@ export function getProjectStages(projectId) {
             return res.json();
         });
 }
+
+/**
+ * Обновляет состав исполнителей и куратора для задачи.
+ * @param {string} taskId ID задачи.
+ * @param {object} payload Объект с curatorId, memberIds и modifierName.
+ * @returns {Promise<object>}
+ */
+export function updateTaskMembers(taskId, payload) {
+    return fetch(`/api/task/${taskId}/members`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+    }).then(res => {
+        if (!res.ok) {
+            // Попытаемся получить текст ошибки с сервера
+            return res.json().then(errorData => {
+                throw new Error(errorData.error || 'Ошибка при обновлении исполнителей');
+            });
+        }
+        return res.json();
+    });
+}

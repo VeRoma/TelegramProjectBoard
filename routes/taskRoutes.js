@@ -238,4 +238,26 @@ router.post('/project/:projectId/stages', async (req, res) => {
     }
 });
 
+// --- НАЧАЛО НОВОГО БЛОКА ---
+router.post('/task/:taskId/members', async (req, res) => {
+    try {
+        const { taskId } = req.params;
+        // Получаем ID куратора и полный список ID всех участников
+        const { curatorId, memberIds, modifierName } = req.body;
+
+        if (!taskId || !curatorId || !Array.isArray(memberIds)) {
+            return res.status(400).json({ error: 'Некорректные данные для обновления участников.' });
+        }
+
+        // Вызываем новую функцию для обновления данных в Google Sheets
+        await googleSheetsService.updateTaskMembers(taskId, curatorId, memberIds, modifierName);
+        
+        res.status(200).json({ status: 'success', message: 'Состав исполнителей успешно обновлен.' });
+    } catch (error) {
+        console.error(`[SERVER ERROR] POST /api/task/${req.params.taskId}/members:`, error);
+        res.status(500).json({ error: error.message });
+    }
+});
+// --- КОНЕЦ НОВОГО БЛОКА ---
+
 module.exports = router;

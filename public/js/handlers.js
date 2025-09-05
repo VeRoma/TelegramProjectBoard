@@ -391,3 +391,36 @@ async function handleSaveStages(projectId) {
          uiUtils.showMessage(`Ошибка сохранения: ${error.message}`, 'error');
     }
 }
+
+// public/js/handlers.js
+
+// --- НАЧАЛО ЗАМЕНЫ ФУНКЦИИ ---
+export async function handleUpdateTaskMembers(targetElementId, curatorId, memberIds) {
+    try {
+        // --- КЛЮЧЕВОЕ ИСПРАВЛЕНИЕ ЗДЕСЬ ---
+        // Мы получаем 'task-details-1' и превращаем его в '1'
+        const taskId = targetElementId.replace('task-details-', '');
+
+        const appData = store.getAppData();
+        const payload = {
+            curatorId: curatorId,
+            memberIds: memberIds,
+            modifierName: appData.userName
+        };
+
+        // Отправляем на сервер уже правильный, чистый taskId
+        const result = await api.updateTaskMembers(taskId, payload);
+
+        if (result.status === 'success') {
+            uiUtils.showMessage('Состав исполнителей обновлен!', 'success');
+            // Временно перезагружаем все данные для обновления интерфейса
+            auth.initializeApp();
+        } else {
+            throw new Error(result.error || 'Неизвестная ошибка сервера');
+        }
+    } catch (error) {
+        console.error('Ошибка при обновлении исполнителей:', error);
+        uiUtils.showMessage(error.message, 'error');
+    }
+}
+// --- КОНЕЦ ЗАМЕНЫ ФУНКЦИИ ---

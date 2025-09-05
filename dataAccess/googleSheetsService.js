@@ -6,6 +6,7 @@ const {
     USER_COLUMNS, 
     PROJECT_COLUMNS, 
     MEMBER_COLUMNS, 
+    TASK_MEMBERS_COLUMNS, 
     STATUS_COLUMNS,
     PROJECT_MEMBERS_COLUMNS,
     PROJECT_STAGES_COLUMNS,
@@ -363,6 +364,48 @@ const getActiveProjectStages = async () => {
     return projectStages;
 };
 
+// --- НАЧАЛО НОВОГО БЛОКА ---
+const updateTaskMembers = async (taskId, curatorId, memberIds, modifierName) => {
+    // --- Этап 1: Обновление Куратора в основной таблице "Tasks" ---
+    const tasksSheet = await getSheet(SHEET_NAMES.TASKS);
+    const taskRows = await tasksSheet.getRows();
+    const taskToUpdate = taskRows.find(row => row.get(TASK_COLUMNS.TASK_ID) == taskId);
+
+    if (!taskToUpdate) {
+        throw new Error('Задача не найдена для обновления куратора.');
+    }
+    // Устанавливаем нового куратора
+    taskToUpdate.set(TASK_COLUMNS.USER_ID, curatorId);
+    await taskToUpdate.save();
+
+    // --- Этап 2: Полное обновление исполнителей в таблице "TaskMembers" ---
+    const membersSheet = await getSheet(SHEET_NAMES.TASK_MEMBERS);
+    const memberRows = await membersSheet.getRows();
+
+    // Находим и удаляем все старые записи для этой задачи
+    const rowsToDelete = memberRows.filter(row => row.get(MEMBER_COLUMNS.TASK_ID) == taskId);
+    // Используем Promise.all для ускорения удаления
+    await Promise.all(rowsToDelete.map(row => row.delete()));
+
+    // Добавляем новые записи для всех участников (включая куратора)
+    if (memberIds && memberIds.length > 0) {
+        const allStatuses = await getAllStatuses();
+        // Находим статус "К выполнению" как статус по умолчанию для новых участников
+        const defaultStatus = allStatuses.find(s => s.name === "К выполнению") || { statusId: '1' };
+
+        const newRowsData = memberIds.map(userId => ({
+            [MEMBER_COLUMNS.TASK_ID]: taskId,
+            [MEMBER_COLUMNS.USER_ID]: userId,
+            [MEMBER_COLUMNS.STATUS_ID]: defaultStatus.statusId, // Статус по умолчанию
+            [MEMBER_COLUMNS.PRIORITY]: 99 // Приоритет по умолчанию
+        }));
+        await membersSheet.addRows(newRowsData);
+    }
+
+    return { success: true };
+};
+// --- КОНЕЦ НОВОГО БЛОКА ---
+
 module.exports = {
     loadSheetDataMiddleware,
     getSheet,
@@ -387,6 +430,7 @@ module.exports = {
     updateProjectStages,
     getActiveStageIdsByProjectId,
     getActiveProjectStages,
-    getAllTaskMembers
+    getAllTaskMembers,
+    updateTaskMembers
 
 };

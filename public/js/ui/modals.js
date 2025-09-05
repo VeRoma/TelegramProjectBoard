@@ -73,58 +73,97 @@ export function openStatusModal(taskId) {
     statusModal.dataset.currentTaskId = taskId; 
 }
 
+// --- НАЧАЛО ЗАМЕНЫ ФУНКЦИИ ---
 export async function openEmployeeModal(activeTaskDetailsElement, allEmployees, userRole) {
     const taskData = JSON.parse(activeTaskDetailsElement.dataset.task);
     const projectId = taskData.projectId;
-    const currentResponsibleText = activeTaskDetailsElement.querySelector('.task-responsible-view').textContent;
-    const isLimitedView = !['owner', 'admin'].includes(userRole);
+    const currentCuratorId = taskData.curatorId; // Убедитесь, что curatorId передается в taskData
+    const currentMemberIds = new Set((taskData.members || []).map(m => m.userId));
 
-    if (isLimitedView) {
-         employeeModal.innerHTML = `
-            <div class="modal-content">
-                <div class="p-4 border-b" style="border-color: var(--tg-theme-hint-color);">
-                    <h3 class="text-lg font-bold">Ответственные</h3>
-                </div>
-                <div class="modal-body">
-                    <p>${currentResponsibleText || 'Не назначены'}</p>
-                </div>
-            </div>`;
-    } else {
-        let employeesToShow = [];
-        try {
-            const memberIds = await api.getProjectMembers(projectId);
-            const memberIdsSet = new Set(memberIds);
-            employeesToShow = allEmployees.filter(emp => memberIdsSet.has(emp.userId));
-        } catch (error) {
-            console.error('Failed to load project members for editing:', error);
-            uiUtils.showMessage('Ошибка загрузки участников проекта', 'error');
-            employeesToShow = allEmployees;
-        }
-        
-        employeesToShow.sort((a, b) => a.name.localeCompare(b.name));
-
-        const currentResponsible = currentResponsibleText.split(',').map(n => n.trim());
-        const employeesCheckboxes = employeesToShow.map(e => `
-            <label class="flex items-center space-x-3 p-3 rounded-md hover:bg-gray-200">
-                <input type="checkbox" value="${e.name}" ${currentResponsible.includes(e.name) ? 'checked' : ''} class="employee-checkbox w-4 h-4 rounded">
-                <span>${e.name}</span>
-            </label>
-        `).join('');
-
-        employeeModal.innerHTML = `
-            <div class="modal-content">
-                <div class="p-4 border-b" style="border-color: var(--tg-theme-hint-color);">
-                    <h3 class="text-lg font-bold">Выберите ответственных</h3>
-                </div>
-                <div class="modal-body modal-body-employee">${employeesCheckboxes}</div>
-                <div class="p-2 border-t flex justify-end" style="border-color: var(--tg-theme-hint-color);">
-                    <button class="modal-select-btn px-4 py-2 rounded-lg">Выбрать</button>
-                </div>
-            </div>`;
+    // 1. Загружаем актуальный список участников проекта
+    let employeesToShow = [];
+    try {
+        const projectMemberIds = await api.getProjectMembers(projectId);
+        const projectMemberIdsSet = new Set(projectMemberIds);
+        employeesToShow = allEmployees.filter(emp => projectMemberIdsSet.has(emp.userId));
+    } catch (error) {
+        console.error('Failed to load project members for editing:', error);
+        uiUtils.showMessage('Ошибка загрузки участников проекта', 'error');
+        return;
     }
+    
+    employeesToShow.sort((a, b) => a.name.localeCompare(b.name));
+
+    // 2. Внутренняя функция для отрисовки списка с иконкой куратора
+    const renderEmployeeList = (curatorId) => {
+        return employeesToShow.map(e => {
+            const isCurator = e.userId == curatorId;
+            return `
+                <label class="employee-select-label flex items-center space-x-3 p-3 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700 cursor-pointer">
+                    <input type="checkbox" value="${e.userId}" class="employee-checkbox w-5 h-5 rounded">
+                    <span class="employee-name">${e.name}</span>
+                    ${isCurator ? '<span class="curator-icon text-lg">👑</span>' : ''}
+                </label>
+            `;
+        }).join('');
+    };
+    
+    // 3. Собираем HTML модального окна
+    employeeModal.innerHTML = `
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 class="font-bold">Выберите ответственных</h3>
+                <button class="modal-close-btn">&times;</button>
+            </div>
+            <div class="modal-body modal-body-employee" id="employee-list-container">
+                ${renderEmployeeList(currentCuratorId)}
+            </div>
+            <div class="modal-footer">
+                <button class="modal-select-btn w-full p-3 rounded-lg font-bold">Выбрать</button>
+            </div>
+        </div>
+    `;
+
+    // 4. Восстанавливаем состояние чекбоксов
+    currentMemberIds.forEach(id => {
+        const checkbox = employeeModal.querySelector(`input[value="${id}"]`);
+        if (checkbox) checkbox.checked = true;
+    });
+
     employeeModal.classList.add('active');
     employeeModal.dataset.targetElementId = activeTaskDetailsElement.id;
+
+    // 5. Динамическое управление иконкой куратора
+    const container = employeeModal.querySelector('#employee-list-container');
+    let lastCheckedOrder = Array.from(employeeModal.querySelectorAll('.employee-checkbox:checked')).map(cb => cb.value);
+
+    container.addEventListener('change', (e) => {
+        if (e.target.classList.contains('employee-checkbox')) {
+            const targetId = e.target.value;
+
+            if (e.target.checked) {
+                // Если добавили, вставляем в конец списка
+                lastCheckedOrder.push(targetId);
+            } else {
+                // Если убрали, удаляем из списка
+                lastCheckedOrder = lastCheckedOrder.filter(id => id !== targetId);
+            }
+            
+            const newCuratorId = lastCheckedOrder.length > 0 ? lastCheckedOrder[0] : null;
+
+            // Просто и эффективно: убираем все старые иконки и ставим одну новую
+            container.querySelectorAll('.curator-icon').forEach(icon => icon.remove());
+            if (newCuratorId) {
+                const curatorLabel = container.querySelector(`input[value="${newCuratorId}"]`).parentElement;
+                const icon = document.createElement('span');
+                icon.className = 'curator-icon text-lg';
+                icon.textContent = '👑';
+                curatorLabel.appendChild(icon);
+            }
+        }
+    });
 }
+// --- КОНЕЦ ЗАМЕНЫ ФУНКЦИИ ---
 
 export function openProjectModal(activeTaskDetailsElement, allProjects) {
     const currentProject = activeTaskDetailsElement.querySelector('.task-project-view').textContent;
@@ -325,7 +364,7 @@ export function openManageStagesModal(projectName, allStages, activeStageIds) {
 }
 
 export function setupModals(onStatusChange) {
-    const modals = [statusModal, employeeModal, projectModal, addTaskModal, manageMembersModal, stageModal];
+    const modals = [statusModal, employeeModal, projectModal, addTaskModal, manageMembersModal, manageStagesModal];
     modals.forEach(modal => {
         if (!modal) return;
         
@@ -362,8 +401,20 @@ export function setupModals(onStatusChange) {
                 if (!targetElement) return;
 
                 if (modal.id === 'employee-modal') {
-                    const selected = [...modal.querySelectorAll('.employee-checkbox:checked')].map(cb => cb.value);
-                    targetElement.querySelector('.task-responsible-view').textContent = selected.join(', ');
+                    const checkedCheckboxes = [...modal.querySelectorAll('.employee-checkbox:checked')];
+                    
+                    if (checkedCheckboxes.length === 0) {
+                        // Нельзя оставить задачу без ответственных
+                        uiUtils.showMessage('Задача должна иметь хотя бы одного ответственного (Куратора).', 'error');
+                        return; // Прерываем выполнение, не закрываем модальное окно
+                    }
+
+                    // Собираем данные для отправки на сервер
+                    const memberIds = checkedCheckboxes.map(cb => cb.value);
+                    const curatorId = memberIds[0]; // По нашему ТЗ, первый в списке - куратор
+
+                    // Вызываем обработчик, который отправит данные на сервер
+                    handlers.handleUpdateTaskMembers(targetElement.id, curatorId, memberIds);
                 } else if (modal.id === 'project-modal') {
                     const selected = modal.querySelector('input[name="project"]:checked');
                     if (selected) targetElement.querySelector('.task-project-view').textContent = selected.value;

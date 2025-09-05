@@ -59,7 +59,7 @@ module.exports = {
     },
     
     // Названия колонок для листа "TaskMembers" (дополнительные участники задачи)
-    TASK_MEMBER_COLUMNS: {
+    TASK_MEMBERS_COLUMNS: {
         TASK_MEMBER_ID: 'task_member_id',
         TASK_ID: 'task_id',
         USER_ID: 'user_id',

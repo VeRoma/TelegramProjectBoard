@@ -70,8 +70,19 @@ let stageFilters = {};
 export const setStageFilters = (filters) => { stageFilters = filters; };
 export const getStageFilters = () => stageFilters;
 
+// --- НАЧАЛО ЗАМЕНЫ ФУНКЦИИ ---
+
 export const getStageNameById = (stageId) => {
-    if (!appData.allStages) return null;
-    const stage = appData.allStages.find(s => s.stageId == stageId);
-    return stage ? stage.name : null;
+    if (!stageId) return 'Без этапа';
+
+    // Правильно получаем данные через функцию getAppData()
+    const data = getAppData(); 
+    if (!data || !data.allStages) {
+        return 'Неизвестный этап';
+    }
+
+    const stage = data.allStages.find(s => String(s.stageId) === String(stageId));
+    return stage ? stage.name : 'Неизвестный этап';
 };
+
+// --- КОНЕЦ ЗАМЕНЫ ФУНКЦИИ ---
