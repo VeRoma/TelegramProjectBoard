@@ -8,24 +8,27 @@ const { ERROR_MESSAGES, USER_COLUMNS } = require('../config/constants');
 router.use(googleSheetsService.loadSheetDataMiddleware);
 
 router.post('/verifyuser', async (req, res) => {
-    const { user } = req.body;
-    if (!user || !user.id) {
-        return res.status(400).json({ error: ERROR_MESSAGES.USER_OBJECT_REQUIRED });
-    }
     try {
-        // Ищем пользователя в листе 'Users' по его TGUserID
-        const user = await googleSheetsService.getUserById(user.id);
+        // Решение: Переименовываем 'user' из запроса в 'telegramUser'
+        const { user: telegramUser } = req.body; 
+        if (!telegramUser || !telegramUser.id) {
+            return res.status(400).json({ error: ERROR_MESSAGES.USER_OBJECT_REQUIRED });
+        }
+        
+        // Теперь ищем пользователя в нашей системе, используя telegramUser.id
+        const existingUser = await googleSheetsService.getUserById(telegramUser.id);
 
-        if (user) {
-            // await googleSheetsService.logUserAccess(user); // Пока закомментируем, чтобы не вызывать ошибку
+        if (existingUser) {
+            // Логируем доступ, используя данные из Telegram
+            await googleSheetsService.logUserAccess(telegramUser);
             
-            // `user` - это уже готовый JS-объект
+            // Отвечаем клиенту данными из нашей системы
             res.status(200).json({ 
                 status: 'authorized', 
-                name: user.name, 
-                role: user.role 
+                name: existingUser.name, 
+                role: existingUser.role 
             });
-        }  else {
+        } else {
             res.status(200).json({ status: 'unregistered' });
         }
     } catch (error) {
