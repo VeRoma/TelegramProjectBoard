@@ -260,4 +260,32 @@ router.post('/task/:taskId/members', async (req, res) => {
 });
 // --- КОНЕЦ НОВОГО БЛОКА ---
 
+
+
+// --- НАЧАЛО НОВОГО БЛОКА ---
+router.get('/details/all-connections', async (req, res) => {
+    try {
+        const [
+            allProjectMembers,
+            allTaskMembers,
+            allProjectStages
+        ] = await Promise.all([
+            googleSheetsService.getAllProjectMembers(),
+            googleSheetsService.getAllTaskMembers(),
+            googleSheetsService.getAllProjectStages()
+        ]);
+
+        res.status(200).json({
+            projectMembers: allProjectMembers,
+            taskMembers: allTaskMembers,
+            projectStages: allProjectStages
+        });
+
+    } catch (error) {
+        console.error('[SERVER ERROR] in /api/details/all-connections:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+// --- КОНЕЦ НОВОГО БЛОКА ---
+
 module.exports = router;

@@ -304,10 +304,26 @@ export async function handleDeleteTask(taskId) {
 
 export async function handleManageMembers(projectId, projectName) {
     try {
-        uiUtils.showMessage('Загрузка участников...', 'info');
         const allUsers = store.getAllUsers();
-        const currentMemberIds = await api.getProjectMembers(projectId);
         
+        // ИСПРАВЛЕНИЕ: Убираем запрос к API
+        // const currentMemberIds = await api.getProjectMembers(projectId);
+        
+        // Вместо этого, получаем ВСЕХ участников из store и фильтруем их локально
+        const allProjectMembers = store.getAllProjectMembers();
+        const currentMemberIds = allProjectMembers
+            .filter(m => m.projectId == projectId && m.isActive === 'TRUE')
+            .map(m => m.userId);
+
+        // Если фоновая загрузка еще не завершилась, allProjectMembers будет пустым.
+        // В этом случае, для надежности, можно сделать старый запрос. (Опционально, но рекомендуется)
+        if (allProjectMembers.length === 0) {
+            console.warn('[HANDLERS.JS] Background data not ready, falling back to API call for members.');
+            uiUtils.showMessage('Загрузка участников...', 'info');
+            const ids = await api.getProjectMembers(projectId);
+            currentMemberIds.push(...ids);
+        }
+
         modals.openManageMembersModal(projectName, allUsers, currentMemberIds);
         
         const saveBtn = document.getElementById('save-members-btn');
@@ -337,6 +353,7 @@ async function handleSaveMembers(projectId) {
         if (result.status === 'success') {
             document.getElementById('manage-members-modal').classList.remove('active');
             uiUtils.showMessage('Список участников обновлен!', 'success');
+            handleBackgroundDataFetch();
         } else {
             throw new Error(result.error || 'Неизвестная ошибка сервера');
         }
@@ -347,10 +364,23 @@ async function handleSaveMembers(projectId) {
 
 export async function handleManageStages(projectId, projectName) {
     try {
-        uiUtils.showMessage('Загрузка этапов...', 'info');
-        const allStages = await api.getAllStages();
-        const activeStageIds = store.getStageFilters()[projectId] || [];
-        
+        const allStages = store.getAppData().allStages; // Полный справочник этапов
+
+        // ИСПРАВЛЕНИЕ: Убираем запрос к API
+        // const activeStageIds = store.getStageFilters()[projectId] || [];
+
+        // Вместо этого, получаем ВСЕ активные этапы из store и фильтруем их локально
+        const allProjectStages = store.getAllProjectStages();
+        const activeStageIds = allProjectStages
+            .filter(ps => ps.projectId == projectId && ps.isActive === 'TRUE')
+            .map(ps => ps.stageId);
+
+        // Опциональная проверка на случай, если фоновая загрузка не успела завершиться
+        if (allProjectStages.length === 0 && store.getStageFilters()[projectId]) {
+             console.warn('[HANDLERS.JS] Background data not ready, falling back to initial data for stages.');
+             activeStageIds.push(...store.getStageFilters()[projectId]);
+        }
+
         modals.openManageStagesModal(projectName, allStages, activeStageIds);
         
         const saveBtn = document.getElementById('save-stages-btn');
@@ -375,7 +405,7 @@ async function handleSaveStages(projectId) {
         if (result.status === 'success') {
             document.getElementById('manage-stages-modal').classList.remove('active');
             uiUtils.showMessage('Список этапов обновлен!', 'success');
-            
+            handleBackgroundDataFetch();
             const appData = store.getAppData();
             const currentFilters = store.getStageFilters();
             currentFilters[projectId] = newStageIds;
@@ -423,4 +453,22 @@ export async function handleUpdateTaskMembers(targetElementId, curatorId, member
         uiUtils.showMessage(error.message, 'error');
     }
 }
-// --- КОНЕЦ ЗАМЕНЫ ФУНКЦИИ ---
+
+
+/**
+ * Обработчик для фоновой загрузки всех связей.
+ * Не показывает сообщений пользователю, работает тихо.
+ */
+
+
+/**
+ * Обработчик для фоновой загрузки всех связей.
+ */
+export async function handleBackgroundDataFetch() {
+    try {
+        const connections = await api.fetchAllConnections();
+        store.setAllConnections(connections);
+    } catch (error) {
+        console.error('[BACKGROUND FETCH ERROR]', error);
+    }
+}

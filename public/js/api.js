@@ -223,3 +223,16 @@ export function updateTaskMembers(taskId, payload) {
         return res.json();
     });
 }
+
+/**
+ * Загружает в фоне все детальные данные (связи).
+ * @returns {Promise<object>}
+ */
+export function fetchAllConnections() {
+    return fetch('/api/details/all-connections')
+        .then(res => {
+            if (!res.ok) throw new Error('Ошибка фоновой загрузки данных');
+            return res.json();
+        });
+}
+

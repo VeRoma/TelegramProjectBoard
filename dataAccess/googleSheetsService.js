@@ -366,9 +366,7 @@ const getActiveProjectStages = async () => {
     return projectStages;
 };
 
-// --- НАЧАЛО НОВОГО БЛОКА ---
 const updateTaskMembers = async (taskId, curatorId, memberIds, modifierName) => {
-    // --- Этап 1: Обновление Куратора в основной таблице "Tasks" ---
     const tasksSheet = await getSheet(SHEET_NAMES.TASKS);
     const taskRows = await tasksSheet.getRows();
     const taskToUpdate = taskRows.find(row => row.get(TASK_COLUMNS.TASK_ID) == taskId);
@@ -376,38 +374,58 @@ const updateTaskMembers = async (taskId, curatorId, memberIds, modifierName) => 
     if (!taskToUpdate) {
         throw new Error('Задача не найдена для обновления куратора.');
     }
-    // Устанавливаем нового куратора
     taskToUpdate.set(TASK_COLUMNS.USER_ID, curatorId);
     await taskToUpdate.save();
 
-    // --- Этап 2: Полное обновление исполнителей в таблице "TaskMembers" ---
     const membersSheet = await getSheet(SHEET_NAMES.TASK_MEMBERS);
     const memberRows = await membersSheet.getRows();
 
-    // Находим и удаляем все старые записи для этой задачи
-    const rowsToDelete = memberRows.filter(row => row.get(MEMBER_COLUMNS.TASK_ID) == taskId);
-    // Используем Promise.all для ускорения удаления
+    // ИСПРАВЛЕНИЕ: Используем TASK_MEMBERS_COLUMNS
+    const rowsToDelete = memberRows.filter(row => row.get(TASK_MEMBERS_COLUMNS.TASK_ID) == taskId);
     await Promise.all(rowsToDelete.map(row => row.delete()));
 
-    // Добавляем новые записи для всех участников (включая куратора)
     if (memberIds && memberIds.length > 0) {
         const allStatuses = await getAllStatuses();
-        // Находим статус "К выполнению" как статус по умолчанию для новых участников
         const defaultStatus = allStatuses.find(s => s.name === "К выполнению") || { statusId: '1' };
 
+        // ИСПРАВЛЕНИЕ: Используем TASK_MEMBERS_COLUMNS
         const newRowsData = memberIds.map(userId => ({
-            [MEMBER_COLUMNS.TASK_ID]: taskId,
-            [MEMBER_COLUMNS.USER_ID]: userId,
-            [MEMBER_COLUMNS.STATUS_ID]: defaultStatus.statusId, // Статус по умолчанию
-            [MEMBER_COLUMNS.PRIORITY]: 99 // Приоритет по умолчанию
+            [TASK_MEMBERS_COLUMNS.TASK_ID]: taskId,
+            [TASK_MEMBERS_COLUMNS.USER_ID]: userId,
+            [TASK_MEMBERS_COLUMNS.STATUS_ID]: defaultStatus.statusId,
+            [TASK_MEMBERS_COLUMNS.PRIORITY]: 99
         }));
         await membersSheet.addRows(newRowsData);
     }
 
     return { success: true };
 };
-// --- КОНЕЦ НОВОГО БЛОКА ---
 
+const getAllProjectMembers = async () => {
+    const sheet = await getSheet(SHEET_NAMES.PROJECT_MEMBERS);
+    if (!sheet) return [];
+    const rows = await sheet.getRows();
+    return rows.map(row => ({
+        projectMemberId: row.get(PROJECT_MEMBERS_COLUMNS.PROJECT_MEMBER_ID),
+        projectId: row.get(PROJECT_MEMBERS_COLUMNS.PROJECT_ID),
+        userId: row.get(PROJECT_MEMBERS_COLUMNS.USER_ID),
+        isActive: row.get(PROJECT_MEMBERS_COLUMNS.IS_ACTIVE)
+    }));
+};
+
+const getAllProjectStages = async () => {
+    const sheet = await getSheet(SHEET_NAMES.PROJECT_STAGES);
+    if (!sheet) return [];
+    const rows = await sheet.getRows();
+    return rows.map(row => ({
+        projectStageId: row.get(PROJECT_STAGES_COLUMNS.PROJECT_STAGE_ID),
+        projectId: row.get(PROJECT_STAGES_COLUMNS.PROJECT_ID),
+        stageId: row.get(PROJECT_STAGES_COLUMNS.STAGE_ID),
+        isActive: row.get(PROJECT_STAGES_COLUMNS.IS_ACTIVE)
+    }));
+};
+
+// 3. ЗАМЕНИТЕ ВАШ БЛОК module.exports НА ЭТОТ
 module.exports = {
     loadSheetDataMiddleware,
     getSheet,
@@ -421,18 +439,19 @@ module.exports = {
     updateTaskInSheet,
     addTaskToSheet,
     updateTaskPrioritiesInSheet,
-    archiveTaskInSheet, 
+    archiveTaskInSheet,
     getProjectIdsByUserId,
     getMemberIdsByProjectId,
     updateProjectMembersInSheet,
     logUserAccess,
     doc,
-    getAllUsers,
     getAllStages,
     updateProjectStages,
     getActiveStageIdsByProjectId,
     getActiveProjectStages,
     getAllTaskMembers,
-    updateTaskMembers
-
+    updateTaskMembers,
+    // Новые экспорты для фоновой загрузки
+    getAllProjectMembers,
+    getAllProjectStages
 };

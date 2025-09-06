@@ -1,3 +1,5 @@
+// public/js/ui/modals.js
+
 import * as store from '../store.js';
 import * as uiUtils from './utils.js';
 import * as handlers from '../handlers.js';
@@ -13,14 +15,21 @@ const manageStagesModal = document.getElementById('manage-stages-modal');
 
 let statusModalContentLoaded = false;
 
+// --- ИСПРАВЛЕННАЯ ФУНКЦИЯ 1 ---
 export function openStageModal(activeTaskDetailsElement) {
     const taskData = JSON.parse(activeTaskDetailsElement.dataset.task);
     const projectId = taskData.projectId;
     const currentStageId = taskData.stageId;
 
-    const activeStageIds = new Set((store.getStageFilters()[projectId] || []).map(String));
-    const allStages = store.getAppData().allStages || [];
+    // Используем фоново загруженные данные из store
+    const allProjectStages = store.getAllProjectStages();
+    const activeStageIds = new Set(
+        allProjectStages
+            .filter(ps => ps.projectId == projectId && ps.isActive === 'TRUE')
+            .map(ps => ps.stageId)
+    );
 
+    const allStages = store.getAppData().allStages || [];
     const availableStages = allStages.filter(s => activeStageIds.has(String(s.stageId)));
 
     stageModal.innerHTML = `
@@ -35,7 +44,7 @@ export function openStageModal(activeTaskDetailsElement) {
                         <input type="radio" name="stage" value="${stage.stageId}" ${stage.stageId == currentStageId ? 'checked' : ''} class="w-4 h-4">
                         <span class="ml-3">${stage.name}</span>
                     </label>
-                `).join('')}
+                `).join('') || '<p class="p-4 text-center text-sm">Для этого проекта не настроены активные этапы.</p>'}
             </div>
             <div class="modal-footer">
                 <button class="modal-select-btn px-4 py-2 rounded-lg">Выбрать</button>
@@ -46,6 +55,7 @@ export function openStageModal(activeTaskDetailsElement) {
     stageModal.dataset.targetElementId = activeTaskDetailsElement.id;
 }
 
+// --- БЕЗ ИЗМЕНЕНИЙ ---
 export function openStatusModal(taskId) {
     console.log(`[MODALS.JS LOG] openStatusModal received taskId: ${taskId}`);
     uiUtils.collapseAllTaskDetails();
@@ -73,28 +83,24 @@ export function openStatusModal(taskId) {
     statusModal.dataset.currentTaskId = taskId; 
 }
 
-// --- НАЧАЛО ЗАМЕНЫ ФУНКЦИИ ---
+// --- ИСПРАВЛЕННАЯ ФУНКЦИЯ 2 ---
 export async function openUserModal(activeTaskDetailsElement, allUsers, userRole) {
     const taskData = JSON.parse(activeTaskDetailsElement.dataset.task);
     const projectId = taskData.projectId;
-    const currentCuratorId = taskData.curatorId; // Убедитесь, что curatorId передается в taskData
+    const currentCuratorId = taskData.curatorId;
     const currentMemberIds = new Set((taskData.members || []).map(m => m.userId));
 
-    // 1. Загружаем актуальный список участников проекта
-    let usersToShow = [];
-    try {
-        const projectMemberIds = await api.getProjectMembers(projectId);
-        const projectMemberIdsSet = new Set(projectMemberIds);
-        usersToShow = allUsers.filter(emp => projectMemberIdsSet.has(emp.userId));
-    } catch (error) {
-        console.error('Failed to load project members for editing:', error);
-        uiUtils.showMessage('Ошибка загрузки участников проекта', 'error');
-        return;
-    }
-    
+    // Используем фоново загруженные данные из store
+    const allProjectMembers = store.getAllProjectMembers();
+    const projectMemberIds = new Set(
+        allProjectMembers
+            .filter(m => m.projectId == projectId && m.isActive === 'TRUE')
+            .map(m => m.userId)
+    );
+
+    let usersToShow = allUsers.filter(emp => projectMemberIds.has(emp.userId));
     usersToShow.sort((a, b) => a.name.localeCompare(b.name));
 
-    // 2. Внутренняя функция для отрисовки списка с иконкой куратора
     const renderUserList = (curatorId) => {
         return usersToShow.map(e => {
             const isCurator = e.userId == curatorId;
@@ -108,7 +114,6 @@ export async function openUserModal(activeTaskDetailsElement, allUsers, userRole
         }).join('');
     };
     
-    // 3. Собираем HTML модального окна
     userModal.innerHTML = `
         <div class="modal-content">
             <div class="modal-header">
@@ -124,7 +129,6 @@ export async function openUserModal(activeTaskDetailsElement, allUsers, userRole
         </div>
     `;
 
-    // 4. Восстанавливаем состояние чекбоксов
     currentMemberIds.forEach(id => {
         const checkbox = userModal.querySelector(`input[value="${id}"]`);
         if (checkbox) checkbox.checked = true;
@@ -133,25 +137,18 @@ export async function openUserModal(activeTaskDetailsElement, allUsers, userRole
     userModal.classList.add('active');
     userModal.dataset.targetElementId = activeTaskDetailsElement.id;
 
-    // 5. Динамическое управление иконкой куратора
     const container = userModal.querySelector('#user-list-container');
     let lastCheckedOrder = Array.from(userModal.querySelectorAll('.user-checkbox:checked')).map(cb => cb.value);
 
     container.addEventListener('change', (e) => {
         if (e.target.classList.contains('user-checkbox')) {
             const targetId = e.target.value;
-
             if (e.target.checked) {
-                // Если добавили, вставляем в конец списка
                 lastCheckedOrder.push(targetId);
             } else {
-                // Если убрали, удаляем из списка
                 lastCheckedOrder = lastCheckedOrder.filter(id => id !== targetId);
             }
-            
             const newCuratorId = lastCheckedOrder.length > 0 ? lastCheckedOrder[0] : null;
-
-            // Просто и эффективно: убираем все старые иконки и ставим одну новую
             container.querySelectorAll('.curator-icon').forEach(icon => icon.remove());
             if (newCuratorId) {
                 const curatorLabel = container.querySelector(`input[value="${newCuratorId}"]`).parentElement;
@@ -163,8 +160,8 @@ export async function openUserModal(activeTaskDetailsElement, allUsers, userRole
         }
     });
 }
-// --- КОНЕЦ ЗАМЕНЫ ФУНКЦИИ ---
 
+// --- БЕЗ ИЗМЕНЕНИЙ ---
 export function openProjectModal(activeTaskDetailsElement, allProjects) {
     const currentProject = activeTaskDetailsElement.querySelector('.task-project-view').textContent;
     projectModal.innerHTML = `<div class="modal-content"><div class="p-4 border-b" style="border-color: var(--tg-theme-hint-color);"><h3 class="text-lg font-bold">Выберите проект</h3></div><div class="modal-body">${allProjects.map(p => `<label class="flex items-center space-x-3 p-3 rounded-md hover:bg-gray-200"><input type="radio" name="project" value="${p.projectName}" ${p.projectName === currentProject ? 'checked' : ''} class="w-4 h-4"><span>${p.projectName}</span></label>`).join('')}</div><div class="p-2 border-t flex justify-end" style="border-color: var(--tg-theme-hint-color);"><button class="modal-select-btn px-4 py-2 rounded-lg">Выбрать</button></div></div>`;
@@ -172,14 +169,12 @@ export function openProjectModal(activeTaskDetailsElement, allProjects) {
     projectModal.dataset.targetElementId = activeTaskDetailsElement.id;
 }
 
-// В файле public/js/ui/modals.js
-
+// --- ИСПРАВЛЕННАЯ ФУНКЦИЯ 3 ---
 export function openAddTaskModal(allProjects, allUsers, userRole, userName) {
     document.body.classList.add('overflow-hidden');
     const tg = window.Telegram.WebApp;
     const projectsOptions = allProjects.map(p => `<option value="${p.projectId}">${p.projectName}</option>`).join('');
     
-    // Фильтруем статусы
     const allStatuses = store.getAllStatuses();
     const allowedStatusIds = new Set(['1', '5', '6']);
     const filteredStatuses = allStatuses.filter(status => allowedStatusIds.has(status.statusId));
@@ -241,59 +236,46 @@ export function openAddTaskModal(allProjects, allUsers, userRole, userName) {
         userSection.style.display = 'block';
     }
 
-    const renderUsers = (users) => {
-        if (users.length === 0) {
-            userContainer.innerHTML = `<p class="text-sm text-gray-500">Список пуст. Выберите проект или добавьте участников в него.</p>`;
-            return;
-        }
-        userContainer.innerHTML = users.map(emp => `
-            <label class="flex items-center space-x-3 p-3 rounded-md hover:bg-gray-200">
-                <input type="checkbox" value="${emp.name}" class="user-checkbox w-4 h-4 rounded">
-                <span>${emp.name}</span>
-            </label>
-        `).join('');
-    };
-
-    projectSelect.addEventListener('change', async (event) => {
-        // --- НАЧАЛО БЛОКА С ЛОГАМИ ---
-        console.log("--- DEBUG: Project selection changed ---");
+    projectSelect.addEventListener('change', (event) => {
         const projectId = event.target.value;
-        console.log(`1. Selected Project ID: ${projectId}`);
+
+        // Обновляем список участников из предзагруженных данных
+        const allProjectMembers = store.getAllProjectMembers();
+        const projectMemberIds = new Set(
+            allProjectMembers
+                .filter(m => m.projectId == projectId && m.isActive === 'TRUE')
+                .map(m => m.userId)
+        );
+        const projectMembers = allUsers.filter(emp => projectMemberIds.has(emp.userId));
         
-        try {
-            const memberIds = await api.getProjectMembers(projectId);
-            const memberIdsSet = new Set(memberIds);
-            const projectMembers = allUsers.filter(emp => memberIdsSet.has(emp.userId));
-            renderUsers(projectMembers);
-        } catch (error) {
-            console.error('[DEBUG] Failed to load project members:', error);
-            renderUsers([]);
+        if (projectMembers.length === 0) {
+            userContainer.innerHTML = `<p class="text-sm text-gray-500">В этом проекте нет участников.</p>`;
+        } else {
+            userContainer.innerHTML = projectMembers.map(emp => `
+                <label class="flex items-center space-x-3 p-3 rounded-md hover:bg-gray-200">
+                    <input type="checkbox" value="${emp.name}" class="user-checkbox w-4 h-4 rounded">
+                    <span>${emp.name}</span>
+                </label>
+            `).join('');
         }
 
-        const allStageFilters = store.getStageFilters();
-        console.log('2. All stored stage filters:', allStageFilters);
-
-        const activeStageIdsForProject = allStageFilters[projectId] || [];
-        console.log(`3. Active Stage IDs for this project (from store):`, activeStageIdsForProject);
-
+        // Обновляем список этапов из предзагруженных данных
+        const allProjectStages = store.getAllProjectStages();
+        const activeStageIds = new Set(
+            allProjectStages
+                .filter(ps => ps.projectId == projectId && ps.isActive === 'TRUE')
+                .map(ps => ps.stageId)
+        );
         const allStages = store.getAppData().allStages || [];
-        console.log('4. All available stages in the app:', allStages);
-
-        const activeStageIdsSet = new Set(activeStageIdsForProject.map(String));
-        const availableStages = allStages.filter(s => activeStageIdsSet.has(String(s.stageId)));
-        console.log('5. Filtered stages to show in dropdown:', availableStages);
-
-        const stageOptionsHtml = availableStages.map(stage => 
-            `<option value="${stage.stageId}">${stage.name}</option>`
-        ).join('');
-        console.log('6. Final HTML for stages dropdown:', stageOptionsHtml);
+        const availableStages = allStages.filter(s => activeStageIds.has(String(s.stageId)));
         
-        stageSelect.innerHTML = stageOptionsHtml;
-        if(availableStages.length === 0) {
+        if (availableStages.length === 0) {
             stageSelect.innerHTML = '<option value="" disabled selected>Нет активных этапов</option>';
+        } else {
+            stageSelect.innerHTML = availableStages.map(stage => 
+                `<option value="${stage.stageId}">${stage.name}</option>`
+            ).join('');
         }
-        console.log("--- DEBUG: End of handler ---");
-        // --- КОНЕЦ БЛОКА С ЛОГАМИ ---
     });
 
     if (statusToggle) {
@@ -311,6 +293,7 @@ export function openAddTaskModal(allProjects, allUsers, userRole, userName) {
     tg.BackButton.show();
 }
 
+// --- БЕЗ ИЗМЕНЕНИЙ ---
 export function closeAddTaskModal() {
     const tg = window.Telegram.WebApp;
     addTaskModal.classList.remove('active');
@@ -320,6 +303,7 @@ export function closeAddTaskModal() {
     uiUtils.updateFabButtonUI(false, handlers.handleSaveActiveTask, handlers.handleShowAddTaskModal);
 }
 
+// --- БЕЗ ИЗМЕНЕНИЙ ---
 export function openManageMembersModal(projectName, allUsers, currentMemberIds) {
     const listContainer = document.getElementById('members-modal-list');
     const projectNameEl = document.getElementById('members-modal-project-name');
@@ -341,6 +325,7 @@ export function openManageMembersModal(projectName, allUsers, currentMemberIds) 
     manageMembersModal.classList.add('active');
 }
 
+// --- БЕЗ ИЗМЕНЕНИЙ ---
 export function openManageStagesModal(projectName, allStages, activeStageIds) {
     const listContainer = document.getElementById('stages-modal-list');
     const projectNameEl = document.getElementById('stages-modal-project-name');
@@ -363,6 +348,7 @@ export function openManageStagesModal(projectName, allStages, activeStageIds) {
     manageStagesModal.classList.add('active');
 }
 
+// --- БЕЗ ИЗМЕНЕНИЙ ---
 export function setupModals(onStatusChange) {
     const modals = [statusModal, userModal, projectModal, addTaskModal, manageMembersModal, manageStagesModal];
     modals.forEach(modal => {
@@ -372,11 +358,11 @@ export function setupModals(onStatusChange) {
 
         const closeModal = () => {
              if (modal.id === 'add-task-modal') {
-                closeAddTaskModal();
-            } else {
-                modal.classList.remove('active');
-                document.body.classList.remove('overflow-hidden');
-            }
+                 closeAddTaskModal();
+             } else {
+                 modal.classList.remove('active');
+                 document.body.classList.remove('overflow-hidden');
+             }
         };
 
         if (closeBtn) {
@@ -404,16 +390,12 @@ export function setupModals(onStatusChange) {
                     const checkedCheckboxes = [...modal.querySelectorAll('.user-checkbox:checked')];
                     
                     if (checkedCheckboxes.length === 0) {
-                        // Нельзя оставить задачу без ответственных
                         uiUtils.showMessage('Задача должна иметь хотя бы одного ответственного (Куратора).', 'error');
-                        return; // Прерываем выполнение, не закрываем модальное окно
+                        return;
                     }
 
-                    // Собираем данные для отправки на сервер
                     const memberIds = checkedCheckboxes.map(cb => cb.value);
-                    const curatorId = memberIds[0]; // По нашему ТЗ, первый в списке - куратор
-
-                    // Вызываем обработчик, который отправит данные на сервер
+                    const curatorId = memberIds[0];
                     handlers.handleUpdateTaskMembers(targetElement.id, curatorId, memberIds);
                 } else if (modal.id === 'project-modal') {
                     const selected = modal.querySelector('input[name="project"]:checked');

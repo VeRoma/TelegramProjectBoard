@@ -2,6 +2,7 @@ import * as api from './api.js';
 import * as render from './ui/render.js';
 import * as uiUtils from './ui/utils.js';
 import * as store from './store.js';
+import * as handlers from './handlers.js';
 
 function getDebugUserId() {
     const urlParams = new URLSearchParams(window.location.search);
@@ -60,6 +61,8 @@ export async function initializeApp() {
                     // 4. Рендерим проекты, передавая в функцию фильтры из хранилища
                     render.renderProjects(data.projects, data.userName, data.userRole, {}, store.getStageFilters());
                     
+                    handlers.handleBackgroundDataFetch();
+                    
 
                 return true; // Возвращаем true в случае успеха
             } else {
@@ -76,4 +79,16 @@ export async function initializeApp() {
         uiUtils.hideLoading();
     }
     return false;
+}
+
+/**
+ * Загружает в фоне все детальные данные (связи).
+ * @returns {Promise<object>}
+ */
+export function fetchAllConnections() {
+    return fetch('/api/details/all-connections')
+        .then(res => {
+            if (!res.ok) throw new Error('Ошибка фоновой загрузки данных');
+            return res.json();
+        });
 }
