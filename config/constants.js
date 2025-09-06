@@ -124,7 +124,7 @@ module.exports = {
         SHEET_MISSING: 'Один или несколько обязательных листов не найдены в таблице.',
         GOOGLE_SHEET_ACCESS_ERROR: 'Внутренняя ошибка сервера при доступе к Google Sheets',
         USER_OBJECT_REQUIRED: 'User object is required',
-        UNAUTHORIZED_USER_NOT_FOUND: 'Unauthorized: User not found in employees sheet',
+        UNAUTHORIZED_USER_NOT_FOUND: 'Unauthorized: User not found in users sheet',
         TASK_NOT_FOUND: 'Задача не найдена',
         INVALID_DATA_FORMAT: 'Неверный формат данных',
         UNKNOWN_SERVER_ERROR: 'Неизвестная ошибка сервера',

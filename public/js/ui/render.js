@@ -2,7 +2,8 @@ import * as store from '../store.js';
 
 function renderTaskCard(task, isUserView, statuses) {
     const taskDataString = JSON.stringify(task).replace(/'/g, '&apos;');
-    const headerTopLine = isUserView ? task.project : (task.responsible || 'Не назначен');
+    // ИСПРАВЛЕНИЕ ЗДЕСЬ: task.responsible -> task.curator
+    const headerTopLine = isUserView ? task.project : (task.curator || 'Не назначен');
     const statusIcon = (statuses.find(s => s.name === task.status) || {}).icon || '';
 
     return `<div class="card rounded-xl shadow-md overflow-hidden" draggable="true" data-task-id="${task.taskId}" data-status-group="${task.status}">
@@ -14,8 +15,8 @@ function renderTaskCard(task, isUserView, statuses) {
                     <div class="task-status-checker status-action-area" data-status="${task.status}">
                         ${statusIcon}
                     </div>
-                </div>              
-                <div id="task-details-${task.taskId}" class="task-details collapsible-content px-4 pb-4" data-version="${task.version}" data-task='${taskDataString}'></div>
+                </div>
+                <div id="task-details-${task.taskId}" class="task-details collapsible-content" data-version="${task.version}" data-task='${taskDataString}'></div>
             </div>`;
 }
 
@@ -106,60 +107,69 @@ export function renderProjects(projects, userName, userRole, expandedState = {},
                 return (a.priority || 999) - (b.priority || 999);
             });
 
-            // Если после фильтрации задач не осталось, не рендерим карточку проекта
-            if (filteredTasks.length === 0) return;
+            // Проверяем, есть ли в проекте задачи ВООБЩЕ, до всяких фильтров.
+if (project.tasks.length === 0) return;
 
-            const projectCard = document.createElement('div');
-            projectCard.className = 'project-card card rounded-xl shadow-md overflow-hidden';
-            
-            const tasksByStatus = filteredTasks.reduce((acc, task) => {
-                if (!acc[task.status]) acc[task.status] = [];
-                acc[task.status].push(task);
-                return acc;
-            }, {});
-            const sortedStatusKeys = Object.keys(tasksByStatus).sort((a,b) => (statuses.find(s => s.name === a) || {}).order - (statuses.find(s => s.name === b) || {}).order);
+const projectCard = document.createElement('div');
+projectCard.className = 'project-card card rounded-xl shadow-md overflow-hidden';
 
-            let projectHtml = '';
-            sortedStatusKeys.forEach(status => {
-                const tasksInGroup = tasksByStatus[status];
-                const statusIcon = (statuses.find(s => s.name === status) || {}).icon || '';
-                projectHtml += `
-                    <div class="status-group p-2">
-                        <h3 class="status-group-header text-sm font-bold p-2" style="color: var(--tg-theme-hint-color);">${statusIcon} ${status}</h3>
-                        <div class="tasks-list space-y-2" data-status-group="${status}">
-                            ${tasksInGroup.map(task => renderTaskCard(task, false, statuses)).join('')}
-                        </div>
-                    </div>
-                `;
-            });
-            
-            const title = project.name;
-            // Считаем задачи в работе из отфильтрованного списка
-            const tasksInWorkCount = filteredTasks.filter(t => t.status === 'В работе').length;
-            const subtitle = `${tasksInWorkCount} задач в работе`;
+let projectHtml = '';
 
-            const isAdminOrOwner = userRole === 'admin' || userRole === 'owner';
-            
-            const manageMembersButton = isAdminOrOwner 
-                ? `<button class="manage-members-btn p-2 rounded-full absolute top-2 right-12 hover:bg-gray-200 dark:hover:bg-gray-700 z-10" data-project-id="${fullProject.projectId}" data-project-name="${fullProject.projectName}">
-                     <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"></path></svg>
-                   </button>` 
-                : '';
-
-            const manageStagesButton = isAdminOrOwner
-                ? `<button class="manage-stages-btn p-2 rounded-full absolute top-2 right-2 hover:bg-gray-200 dark:hover:bg-gray-700 z-10" data-project-id="${fullProject.projectId}" data-project-name="${fullProject.projectName}">
-                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0h6m-6 0H9m0 0h.01M13 19v-2a2 2 0 00-2-2h-2a2 2 0 00-2 2v2m8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v2m4 0h.01"></path></svg>
-                   </button>`
-                : '';
-
-            projectCard.innerHTML = `
-                <div class="project-header p-4 cursor-pointer relative">
-                    ${manageMembersButton}
-                    ${manageStagesButton}
-                    <h2 class="font-bold text-lg pointer-events-none">${title}</h2>
-                    <p class="text-sm mt-1 pointer-events-none" style="color: var(--tg-theme-hint-color);">${subtitle}</p>
+// Если после фильтрации остались задачи, отрисовываем их
+if (filteredTasks.length > 0) {
+    const tasksByStatus = filteredTasks.reduce((acc, task) => {
+        if (!acc[task.status]) acc[task.status] = [];
+        acc[task.status].push(task);
+        return acc;
+    }, {});
+    const sortedStatusKeys = Object.keys(tasksByStatus).sort((a,b) => (statuses.find(s => s.name === a) || {}).order - (statuses.find(s => s.name === b) || {}).order);
+    
+    sortedStatusKeys.forEach(status => {
+        const tasksInGroup = tasksByStatus[status];
+        const statusIcon = (statuses.find(s => s.name === status) || {}).icon || '';
+        projectHtml += `
+            <div class="status-group p-2">
+                <h3 class="status-group-header text-sm font-bold p-2" style="color: var(--tg-theme-hint-color);">${statusIcon} ${status}</h3>
+                <div class="tasks-list space-y-2" data-status-group="${status}">
+                    ${tasksInGroup.map(task => renderTaskCard(task, false, statuses)).join('')}
                 </div>
-                <div class="project-content collapsible-content">${projectHtml}</div>`;
+            </div>
+        `;
+    });
+} else {
+    // А если задачи не нашлись, показываем информативное сообщение
+    projectHtml = `<div class="p-4 text-center text-sm" style="color: var(--tg-theme-hint-color);">Нет задач, соответствующих фильтру.</div>`;
+}
+
+const title = project.name;
+// Считаем задачи в работе из ОБЩЕГО списка, а не отфильтрованного
+const tasksInWorkCount = project.tasks.filter(t => t.status === 'В работе').length;
+const subtitle = `${tasksInWorkCount} задач в работе`;
+
+const isAdminOrOwner = userRole === 'admin' || userRole === 'owner';
+
+const manageMembersButton = isAdminOrOwner
+    ? `<button class="manage-members-btn p-2 rounded-full absolute top-2 right-12 hover:bg-gray-200 dark:hover:bg-gray-700 z-10" data-project-id="${fullProject.projectId}" data-project-name="${fullProject.projectName}">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"></path></svg>
+        </button>`
+    : '';
+
+const manageStagesButton = isAdminOrOwner
+    ? `<button class="manage-stages-btn p-2 rounded-full absolute top-2 right-2 hover:bg-gray-200 dark:hover:bg-gray-700 z-10" data-project-id="${fullProject.projectId}" data-project-name="${fullProject.projectName}">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0h6m-6 0H9m0 0h.01M13 19v-2a2 2 0 00-2-2h-2a2 2 0 00-2 2v2m8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v2m4 0h.01"></path></svg>
+        </button>`
+    : '';
+
+projectCard.innerHTML = `
+    <div class="project-header p-4 cursor-pointer relative">
+        ${manageMembersButton}
+        ${manageStagesButton}
+        <h2 class="font-bold text-lg pointer-events-none">${title}</h2>
+        <p class="text-sm mt-1 pointer-events-none" style="color: var(--tg-theme-hint-color);">${subtitle}</p>
+    </div>
+    <div class="project-content collapsible-content">${projectHtml}</div>`;
+
+projectsContainer.appendChild(projectCard);
             
             projectsContainer.appendChild(projectCard);
         });
@@ -187,28 +197,27 @@ export function renderProjects(projects, userName, userRole, expandedState = {},
 export function renderTaskDetails(detailsContainer, userRole) {
     const task = JSON.parse(detailsContainer.dataset.task);
 
-    let responsibleFieldHtml = '';
-    // Проверяем роль пользователя для отображения поля "Ответственный"
+    // ИСПРАВЛЕНИЕ: Используем task.curator вместо task.responsible и меняем заголовок
+    let responsibleFieldHtml = `
+        <div>
+            <label class="text-xs font-medium text-gray-500">Куратор</label>
+            <div class="view-field mt-1">
+                <p class="task-responsible-view">${task.curator || 'Не назначен'}</p>
+            </div>
+            <div class="edit-field modal-trigger-field mt-1 p-2 border rounded-md" data-modal-type="user" style="border-color: var(--tg-theme-hint-color);">
+                <p class="task-responsible-view truncate pr-2">${task.curator || 'Выберите ответственных'}</p>
+                <svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+            </div>
+        </div>`;
+
     if (!['admin', 'owner'].includes(userRole)) {
         responsibleFieldHtml = `
-            <div>
-                <label class="text-xs font-medium text-gray-500">Ответственный</label>
-                <div class="view-field mt-1">
-                    <p class="task-responsible-view">${task.responsible || '...'}</p>
-                </div>
-            </div>`;
-    } else {
-        responsibleFieldHtml = `
-            <div>
-                <label class="text-xs font-medium text-gray-500">Ответственный</label>
-                <div class="view-field mt-1">
-                    <p class="task-responsible-view">${task.responsible || '...'}</p>
-                </div>
-                <div class="edit-field modal-trigger-field mt-1 p-2 border rounded-md" data-modal-type="employee" style="border-color: var(--tg-theme-hint-color);">
-                    <p class="task-responsible-view truncate pr-2">${task.responsible || '...'}</p>
-                    <svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
-                </div>
-            </div>`;
+        <div>
+            <label class="text-xs font-medium text-gray-500">Куратор</label>
+            <div class="view-field mt-1">
+                <p class="task-responsible-view">${task.curator || 'Не назначен'}</p>
+            </div>
+        </div>`;
     }
 
     detailsContainer.innerHTML = `

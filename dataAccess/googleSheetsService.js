@@ -98,12 +98,12 @@ const getTasks = async () => {
     return rows.filter(row => row.get(TASK_COLUMNS.IS_DELETED) !== 'TRUE');
 };
 
-const getEmployeeById = async (tgUserId) => {
+const getUserById = async (tgUserId) => {
     const allUsers = await getAllUsers();
     return allUsers.find(user => user.tgUserId == tgUserId);
 };
 
-const getOwnerEmployee = async () => {
+const getOwnerUser = async () => {
     const allUsers = await getAllUsers();
     return allUsers.find(user => user.role === 'owner');
 };
@@ -141,7 +141,9 @@ const addTaskToSheet = async (newTaskData, creatorName) => {
         [TASK_COLUMNS.TASK_ID]: newTaskId,
         [TASK_COLUMNS.NAME]: newTaskData.name,
         [TASK_COLUMNS.PROJECT_ID]: newTaskData.projectId,
-        [TASK_COLUMNS.USER_ID]: newTaskData.responsibleUserIds[0],
+        [TASK_COLUMNS.USER_ID]: (newTaskData.responsibleUserIds && newTaskData.responsibleUserIds.length > 0) 
+    ? newTaskData.responsibleUserIds[0] 
+    : newTaskData.creatorId,
         [TASK_COLUMNS.STATUS_ID]: newTaskData.statusId,
         [TASK_COLUMNS.PRIORITY]: newTaskData.priority,
         [TASK_COLUMNS.VERSION]: 0,
@@ -414,8 +416,8 @@ module.exports = {
     getAllMembers,
     getAllStatuses,
     getTasks,
-    getEmployeeById,
-    getOwnerEmployee,
+    getUserById,
+    getOwnerUser,
     updateTaskInSheet,
     addTaskToSheet,
     updateTaskPrioritiesInSheet,
@@ -425,7 +427,7 @@ module.exports = {
     updateProjectMembersInSheet,
     logUserAccess,
     doc,
-    getAllEmployees: getAllUsers,
+    getAllUsers,
     getAllStages,
     updateProjectStages,
     getActiveStageIdsByProjectId,

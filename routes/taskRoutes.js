@@ -116,7 +116,7 @@ router.post('/appdata', async (req, res) => {
             allProjects: allProjects, 
             userName, 
             userRole,
-            allEmployees: allUsers,
+            allUsers: allUsers,
             allStatuses: allStatuses,
             allStages: allStages,
             activeProjectStages: activeProjectStages

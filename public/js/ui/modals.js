@@ -4,7 +4,7 @@ import * as handlers from '../handlers.js';
 import * as api from '../api.js';
 
 const statusModal = document.getElementById('status-modal');
-const employeeModal = document.getElementById('employee-modal');
+const userModal = document.getElementById('user-modal');
 const projectModal = document.getElementById('project-modal');
 const addTaskModal = document.getElementById('add-task-modal');
 const stageModal = document.getElementById('stage-modal');
@@ -74,34 +74,34 @@ export function openStatusModal(taskId) {
 }
 
 // --- НАЧАЛО ЗАМЕНЫ ФУНКЦИИ ---
-export async function openEmployeeModal(activeTaskDetailsElement, allEmployees, userRole) {
+export async function openUserModal(activeTaskDetailsElement, allUsers, userRole) {
     const taskData = JSON.parse(activeTaskDetailsElement.dataset.task);
     const projectId = taskData.projectId;
     const currentCuratorId = taskData.curatorId; // Убедитесь, что curatorId передается в taskData
     const currentMemberIds = new Set((taskData.members || []).map(m => m.userId));
 
     // 1. Загружаем актуальный список участников проекта
-    let employeesToShow = [];
+    let usersToShow = [];
     try {
         const projectMemberIds = await api.getProjectMembers(projectId);
         const projectMemberIdsSet = new Set(projectMemberIds);
-        employeesToShow = allEmployees.filter(emp => projectMemberIdsSet.has(emp.userId));
+        usersToShow = allUsers.filter(emp => projectMemberIdsSet.has(emp.userId));
     } catch (error) {
         console.error('Failed to load project members for editing:', error);
         uiUtils.showMessage('Ошибка загрузки участников проекта', 'error');
         return;
     }
     
-    employeesToShow.sort((a, b) => a.name.localeCompare(b.name));
+    usersToShow.sort((a, b) => a.name.localeCompare(b.name));
 
     // 2. Внутренняя функция для отрисовки списка с иконкой куратора
-    const renderEmployeeList = (curatorId) => {
-        return employeesToShow.map(e => {
+    const renderUserList = (curatorId) => {
+        return usersToShow.map(e => {
             const isCurator = e.userId == curatorId;
             return `
-                <label class="employee-select-label flex items-center space-x-3 p-3 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700 cursor-pointer">
-                    <input type="checkbox" value="${e.userId}" class="employee-checkbox w-5 h-5 rounded">
-                    <span class="employee-name">${e.name}</span>
+                <label class="user-select-label flex items-center space-x-3 p-3 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700 cursor-pointer">
+                    <input type="checkbox" value="${e.userId}" class="user-checkbox w-5 h-5 rounded">
+                    <span class="user-name">${e.name}</span>
                     ${isCurator ? '<span class="curator-icon text-lg">👑</span>' : ''}
                 </label>
             `;
@@ -109,14 +109,14 @@ export async function openEmployeeModal(activeTaskDetailsElement, allEmployees, 
     };
     
     // 3. Собираем HTML модального окна
-    employeeModal.innerHTML = `
+    userModal.innerHTML = `
         <div class="modal-content">
             <div class="modal-header">
                 <h3 class="font-bold">Выберите ответственных</h3>
                 <button class="modal-close-btn">&times;</button>
             </div>
-            <div class="modal-body modal-body-employee" id="employee-list-container">
-                ${renderEmployeeList(currentCuratorId)}
+            <div class="modal-body modal-body-user" id="user-list-container">
+                ${renderUserList(currentCuratorId)}
             </div>
             <div class="modal-footer">
                 <button class="modal-select-btn w-full p-3 rounded-lg font-bold">Выбрать</button>
@@ -126,19 +126,19 @@ export async function openEmployeeModal(activeTaskDetailsElement, allEmployees, 
 
     // 4. Восстанавливаем состояние чекбоксов
     currentMemberIds.forEach(id => {
-        const checkbox = employeeModal.querySelector(`input[value="${id}"]`);
+        const checkbox = userModal.querySelector(`input[value="${id}"]`);
         if (checkbox) checkbox.checked = true;
     });
 
-    employeeModal.classList.add('active');
-    employeeModal.dataset.targetElementId = activeTaskDetailsElement.id;
+    userModal.classList.add('active');
+    userModal.dataset.targetElementId = activeTaskDetailsElement.id;
 
     // 5. Динамическое управление иконкой куратора
-    const container = employeeModal.querySelector('#employee-list-container');
-    let lastCheckedOrder = Array.from(employeeModal.querySelectorAll('.employee-checkbox:checked')).map(cb => cb.value);
+    const container = userModal.querySelector('#user-list-container');
+    let lastCheckedOrder = Array.from(userModal.querySelectorAll('.user-checkbox:checked')).map(cb => cb.value);
 
     container.addEventListener('change', (e) => {
-        if (e.target.classList.contains('employee-checkbox')) {
+        if (e.target.classList.contains('user-checkbox')) {
             const targetId = e.target.value;
 
             if (e.target.checked) {
@@ -174,7 +174,7 @@ export function openProjectModal(activeTaskDetailsElement, allProjects) {
 
 // В файле public/js/ui/modals.js
 
-export function openAddTaskModal(allProjects, allEmployees, userRole, userName) {
+export function openAddTaskModal(allProjects, allUsers, userRole, userName) {
     document.body.classList.add('overflow-hidden');
     const tg = window.Telegram.WebApp;
     const projectsOptions = allProjects.map(p => `<option value="${p.projectId}">${p.projectName}</option>`).join('');
@@ -222,9 +222,9 @@ export function openAddTaskModal(allProjects, allEmployees, userRole, userName) 
                     <label class="text-xs font-medium text-gray-500">Статус</label>
                     <div id="new-task-status-toggle" class="status-toggle">${statusToggleHtml}</div>
                 </div>
-                <div id="new-task-employees-container" style="display: none;">
+                <div id="new-task-users-container" style="display: none;">
                     <label class="text-xs font-medium text-gray-500">Ответственные</label>
-                    <div id="new-task-employees-list" class="modal-body-employee mt-1 border rounded-md p-2">
+                    <div id="new-task-users-list" class="modal-body-user mt-1 border rounded-md p-2">
                         <p class="text-sm text-gray-500">Сначала выберите проект</p>
                     </div>
                 </div>
@@ -232,23 +232,23 @@ export function openAddTaskModal(allProjects, allEmployees, userRole, userName) 
         </div>`;
         
     const projectSelect = document.getElementById('new-task-project');
-    const employeeContainer = document.getElementById('new-task-employees-list');
-    const employeeSection = document.getElementById('new-task-employees-container');
+    const userContainer = document.getElementById('new-task-users-list');
+    const userSection = document.getElementById('new-task-users-container');
     const statusToggle = document.getElementById('new-task-status-toggle');
     const stageSelect = document.getElementById('new-task-stage');
     
     if (userRole === 'admin' || userRole === 'owner') {
-        employeeSection.style.display = 'block';
+        userSection.style.display = 'block';
     }
 
-    const renderEmployees = (employees) => {
-        if (employees.length === 0) {
-            employeeContainer.innerHTML = `<p class="text-sm text-gray-500">Список пуст. Выберите проект или добавьте участников в него.</p>`;
+    const renderUsers = (users) => {
+        if (users.length === 0) {
+            userContainer.innerHTML = `<p class="text-sm text-gray-500">Список пуст. Выберите проект или добавьте участников в него.</p>`;
             return;
         }
-        employeeContainer.innerHTML = employees.map(emp => `
+        userContainer.innerHTML = users.map(emp => `
             <label class="flex items-center space-x-3 p-3 rounded-md hover:bg-gray-200">
-                <input type="checkbox" value="${emp.name}" class="employee-checkbox w-4 h-4 rounded">
+                <input type="checkbox" value="${emp.name}" class="user-checkbox w-4 h-4 rounded">
                 <span>${emp.name}</span>
             </label>
         `).join('');
@@ -263,11 +263,11 @@ export function openAddTaskModal(allProjects, allEmployees, userRole, userName) 
         try {
             const memberIds = await api.getProjectMembers(projectId);
             const memberIdsSet = new Set(memberIds);
-            const projectMembers = allEmployees.filter(emp => memberIdsSet.has(emp.userId));
-            renderEmployees(projectMembers);
+            const projectMembers = allUsers.filter(emp => memberIdsSet.has(emp.userId));
+            renderUsers(projectMembers);
         } catch (error) {
             console.error('[DEBUG] Failed to load project members:', error);
-            renderEmployees([]);
+            renderUsers([]);
         }
 
         const allStageFilters = store.getStageFilters();
@@ -364,7 +364,7 @@ export function openManageStagesModal(projectName, allStages, activeStageIds) {
 }
 
 export function setupModals(onStatusChange) {
-    const modals = [statusModal, employeeModal, projectModal, addTaskModal, manageMembersModal, manageStagesModal];
+    const modals = [statusModal, userModal, projectModal, addTaskModal, manageMembersModal, manageStagesModal];
     modals.forEach(modal => {
         if (!modal) return;
         
@@ -400,8 +400,8 @@ export function setupModals(onStatusChange) {
                 const targetElement = document.getElementById(modal.dataset.targetElementId);
                 if (!targetElement) return;
 
-                if (modal.id === 'employee-modal') {
-                    const checkedCheckboxes = [...modal.querySelectorAll('.employee-checkbox:checked')];
+                if (modal.id === 'user-modal') {
+                    const checkedCheckboxes = [...modal.querySelectorAll('.user-checkbox:checked')];
                     
                     if (checkedCheckboxes.length === 0) {
                         // Нельзя оставить задачу без ответственных

@@ -10,7 +10,7 @@ export async function handleSaveActiveTask() {
 
     const appData = store.getAppData();
     const responsibleText = activeEditElement.querySelector('.task-responsible-view').textContent;
-    const selectedEmployeeNames = responsibleText ? responsibleText.split(',').map(s => s.trim()).filter(Boolean) : [];
+    const selectedUserNames = responsibleText ? responsibleText.split(',').map(s => s.trim()).filter(Boolean) : [];
     
     const taskId = activeEditElement.closest('[data-task-id]').dataset.taskId;
     const { task: taskInAppData } = store.findTask(taskId);
@@ -20,9 +20,9 @@ export async function handleSaveActiveTask() {
         return;
     }
 
-    const allEmployees = store.getAllEmployees();
-    const responsibleUserIds = allEmployees
-        .filter(emp => selectedEmployeeNames.includes(emp.name))
+    const allUsers = store.getAllUsers();
+    const responsibleUserIds = allUsers
+        .filter(emp => selectedUserNames.includes(emp.name))
         .map(emp => emp.userId);
 
     const statuses = store.getAllStatuses();
@@ -47,7 +47,7 @@ export async function handleSaveActiveTask() {
         project: projectName,
         projectId: projectId,
         stageId: stageId,
-        responsible: selectedEmployeeNames.join(', '),
+        responsible: selectedUserNames.join(', '),
         responsibleUserIds: responsibleUserIds,
         version: parseInt(activeEditElement.dataset.version, 10),
     };
@@ -77,7 +77,7 @@ export async function handleSaveActiveTask() {
 
 export function handleShowAddTaskModal() {
     const appData = store.getAppData();
-    modals.openAddTaskModal(store.getAllProjects(), store.getAllEmployees(), appData.userRole, appData.userName);
+    modals.openAddTaskModal(store.getAllProjects(), store.getAllUsers(), appData.userRole, appData.userName);
     uiUtils.updateFabButtonUI(true, handleSaveNewTaskClick);
 }
 
@@ -125,7 +125,7 @@ export async function handleCreateTask(taskData) {
         }
     } catch (error) {
         uiUtils.showMessage(`Не удалось сохранить задачу: ${error.message}. Обновляем список...`, 'error');
-        setTimeout(() => window.location.reload(), 3000);
+        // setTimeout(() => window.location.reload(), 3000);
     }
 }
 
@@ -245,22 +245,22 @@ export function handleSaveNewTaskClick() {
     if (isLimitedView) {
         responsibleNames = [appData.userName];
     } else {
-        const responsibleCheckboxes = document.querySelectorAll('#add-task-modal .employee-checkbox:checked');
+        const responsibleCheckboxes = document.querySelectorAll('#add-task-modal .user-checkbox:checked');
         responsibleNames = [...responsibleCheckboxes].map(cb => cb.value);
     }
 
-    if (!taskName || !projectId || !stageId || (!isLimitedView && responsibleNames.length === 0)) {
-        return uiUtils.showMessage('Пожалуйста, заполните все поля: Наименование, Проект, Этап и Ответственный.', 'error');
+    if (!taskName || !projectId || !stageId ) {
+        return uiUtils.showMessage('Пожалуйста, заполните все поля: Наименование, Проект, и Этап.', 'error');
     }
 
-    const allEmployees = store.getAllEmployees();
-    const responsibleUsers = allEmployees.filter(emp => responsibleNames.includes(emp.name));
+    const allUsers = store.getAllUsers();
+    const responsibleUsers = allUsers.filter(emp => responsibleNames.includes(emp.name));
     const responsibleUserIds = responsibleUsers.map(emp => emp.userId);
     
     const statuses = store.getAllStatuses();
     const statusId = (statuses.find(s => s.name === statusName) || {}).statusId;
 
-    const currentUser = allEmployees.find(u => u.name === appData.userName);
+    const currentUser = allUsers.find(u => u.name === appData.userName);
     const creatorId = currentUser ? currentUser.userId : null;
 
     handleCreateTask({
@@ -305,7 +305,7 @@ export async function handleDeleteTask(taskId) {
 export async function handleManageMembers(projectId, projectName) {
     try {
         uiUtils.showMessage('Загрузка участников...', 'info');
-        const allUsers = store.getAllEmployees();
+        const allUsers = store.getAllUsers();
         const currentMemberIds = await api.getProjectMembers(projectId);
         
         modals.openManageMembersModal(projectName, allUsers, currentMemberIds);

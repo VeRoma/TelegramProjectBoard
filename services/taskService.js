@@ -107,7 +107,7 @@ const getAppDataForUser = async (user) => {
         userName, 
         userRole,
         currentUserId: currentInternalUserId,
-        allEmployees: allUsers,
+        allUsers: allUsers,
         allStatuses: allStatuses,
         allStages: allStages,
         activeProjectStages: activeProjectStages

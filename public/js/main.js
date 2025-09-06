@@ -56,9 +56,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 console.log(`[MAIN.JS LOG] Extracted taskId from modal trigger: ${taskId}`);
                 modals.openStatusModal(taskId);
             }
-            else if (modalType === 'employee') {
+            else if (modalType === 'user') {
                 const appData = store.getAppData();
-                modals.openEmployeeModal(activeTaskDetailsElement, store.getAllEmployees(), appData.userRole);
+                modals.openUserModal(activeTaskDetailsElement, store.getAllUsers(), appData.userRole);
             }
             else if (modalType === 'project') {
                 modals.openProjectModal(activeTaskDetailsElement, store.getAllProjects());

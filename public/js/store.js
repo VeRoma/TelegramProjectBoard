@@ -3,7 +3,7 @@
 // Приватные переменные, доступные только внутри этого модуля
 let _appData = {};
 let _allProjects = [];
-let _allEmployees = [];
+let _allUsers = [];
 let _allStatuses = [];
 
 /**
@@ -14,7 +14,7 @@ export function setAppData(data) {
     if (!data) return;
     _appData = data;
     _allProjects = data.allProjects || [];
-    _allEmployees = data.allEmployees || [];
+    _allUsers = data.allUsers || [];
     _allStatuses = data.allStatuses || [];
 }
 
@@ -38,8 +38,8 @@ export function getAllProjects() {
  * Возвращает массив со всеми сотрудниками.
  * @returns {Array<object>}
  */
-export function getAllEmployees() {
-    return _allEmployees;
+export function getAllUsers() {
+    return _allUsers;
 }
 
 /**

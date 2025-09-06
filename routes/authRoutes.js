@@ -14,16 +14,16 @@ router.post('/verifyuser', async (req, res) => {
     }
     try {
         // Ищем пользователя в листе 'Users' по его TGUserID
-        const employee = await googleSheetsService.getEmployeeById(user.id);
+        const user = await googleSheetsService.getUserById(user.id);
 
-        if (employee) {
+        if (user) {
             // await googleSheetsService.logUserAccess(user); // Пока закомментируем, чтобы не вызывать ошибку
             
-            // `employee` - это уже готовый JS-объект
+            // `user` - это уже готовый JS-объект
             res.status(200).json({ 
                 status: 'authorized', 
-                name: employee.name, 
-                role: employee.role 
+                name: user.name, 
+                role: user.role 
             });
         }  else {
             res.status(200).json({ status: 'unregistered' });
@@ -37,7 +37,7 @@ router.post('/verifyuser', async (req, res) => {
 router.post('/requestregistration', async (req, res) => {
     const { name, userId } = req.body;
     try {
-        const owner = await googleSheetsService.getOwnerEmployee();
+        const owner = await googleSheetsService.getOwnerUser();
         
         if (owner && owner.tgUserId) {
             await telegramService.sendRegistrationRequest(name, userId, owner.tgUserId);

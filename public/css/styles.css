@@ -135,7 +135,7 @@ body {
     padding: 1rem;
 }
 
-.modal-body-employee {
+.modal-body-user {
     max-height: 25vh;
     overflow-y: auto;
 }
@@ -272,22 +272,22 @@ body[style*="--tg-color-scheme: dark"] .task-status-checker {
 
 .toggle-option {
     flex: 1;
-        padding: 8px;
-        /* Немного уменьшим паддинг */
-        text-align: center;
-        cursor: pointer;
-        background-color: var(--tg-theme-secondary-bg-color, #f0f0f0);
-        color: var(--tg-theme-text-color, #000000);
-        transition: background-color 0.2s, color 0.2s;
-        user-select: none;
-    
-        /* Новые стили для вертикального расположения */
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        justify-content: center;
-        gap: 4px;
-        /* Расстояние между иконкой и текстом */
+    padding: 8px;
+    /* Немного уменьшим паддинг */
+    text-align: center;
+    cursor: pointer;
+    background-color: var(--tg-theme-secondary-bg-color, #f0f0f0);
+    color: var(--tg-theme-text-color, #000000);
+    transition: background-color 0.2s, color 0.2s;
+    user-select: none;
+
+    /* Новые стили для вертикального расположения */
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    /* Расстояние между иконкой и текстом */
 }
 
 .toggle-option .toggle-icon {
