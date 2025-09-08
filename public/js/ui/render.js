@@ -203,7 +203,6 @@ export function renderTasksView(tasks, statuses, isMyTasksView = false) {
     tasksContainer.id = 'tasks-list-container';
     tasksContainer.className = 'space-y-4';
 
-    // --- НАЧАЛО ИЗМЕНЕНИЙ ---
     if (!tasks || tasks.length === 0) {
         const message = isMyTasksView 
             ? 'У вас нет назначенных задач.' 
@@ -211,7 +210,6 @@ export function renderTasksView(tasks, statuses, isMyTasksView = false) {
         mainContainer.innerHTML = `<div class="p-4 rounded-lg text-center" style="background-color: var(--tg-theme-secondary-bg-color);">${message}</div>`;
         return;
     }
-    // --- КОНЕЦ ИЗМЕНЕНИЙ ---
 
     tasks.sort((a, b) => {
         const orderA = (statuses.find(s => s.name === a.status) || { order: 99 }).order;
@@ -240,13 +238,16 @@ export function renderTasksView(tasks, statuses, isMyTasksView = false) {
         const tasksInGroup = tasksByStatus[status];
         const statusInfo = statuses.find(s => s.name === status) || {};
         
+        // --- ИЗМЕНЕНИЕ: Оборачиваем каждую группу в свою карточку ---
         viewHtml += `
-            <div class="status-group p-2">
-                <h3 class="status-group-header text-sm font-bold p-2" style="color: var(--tg-theme-hint-color);">
-                    ${statusInfo.icon || ''} ${status}
-                </h3>
-                <div class="tasks-list space-y-2" data-status-group="${status}">
-                    ${tasksInGroup.map(task => renderTaskCard(task, true, statuses)).join('')}
+            <div class="card rounded-xl shadow-md overflow-hidden">
+                <div class="status-group p-3">
+                    <h3 class="status-group-header text-sm font-bold p-2" style="color: var(--tg-theme-hint-color);">
+                        ${statusInfo.icon || ''} ${status}
+                    </h3>
+                    <div class="tasks-list space-y-2" data-status-group="${status}">
+                        ${tasksInGroup.map(task => renderTaskCard(task, true, statuses)).join('')}
+                    </div>
                 </div>
             </div>
         `;

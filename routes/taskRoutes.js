@@ -88,7 +88,8 @@ router.post('/appdata', async (req, res) => {
                 name: task.get(TASK_COLUMNS.NAME),
                 status: status ? status.name : 'Неизвестный статус',
                 statusId: statusId,
-                curator: curator ? curator.name : 'Не назначен', // <-- Куратор
+                curator: curator ? curator.name : 'Не назначен',
+                userId: mainAssigneeId, 
                 project: project ? project.projectName : 'Без проекта',
                 projectId: projectId,
                 priority: parseInt(task.get(TASK_COLUMNS.PRIORITY), 10) || 1,
@@ -116,10 +117,13 @@ router.post('/appdata', async (req, res) => {
             allProjects: allProjects, 
             userName, 
             userRole,
+            currentUserId: currentInternalUserId,
             allUsers: allUsers,
             allStatuses: allStatuses,
             allStages: allStages,
             activeProjectStages: activeProjectStages
+
+
         });
 
     } catch (error) {
