@@ -113,33 +113,22 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    // --- ЕДИНЫЙ И ПРАВИЛЬНЫЙ ОБРАБОТЧИК ДЛЯ ПАНЕЛИ ИНСТРУМЕНТОВ ---
     const viewToolbar = document.getElementById('view-toolbar');
-    viewToolbar.addEventListener('click', (event) => {
-        const targetButton = event.target.closest('.view-btn');
-        if (!targetButton) return;
+viewToolbar.addEventListener('click', (event) => {
+    const targetButton = event.target.closest('.view-btn');
+    if (!targetButton) return;
 
-        viewToolbar.querySelectorAll('.view-btn').forEach(btn => btn.classList.remove('active'));
+    if (targetButton.id === 'view-btn-stages-filter') {
+        modals.openStagesFilterModal(rerenderApp);
+        return;
+    }
+
+    if (targetButton.closest('.view-modes')) {
+        viewToolbar.querySelectorAll('.view-modes .view-btn').forEach(btn => btn.classList.remove('active'));
         targetButton.classList.add('active');
-
-        const appData = store.getAppData();
-        
-        if (targetButton.id === 'view-btn-tasks') {
-            const allTasks = appData.projects.flatMap(p => p.tasks);
-            render.renderTasksView(allTasks, store.getAllStatuses());
-        } else if (targetButton.id === 'view-btn-my-tasks') {
-            const allTasks = appData.projects.flatMap(p => p.tasks);
-            const currentUserId = appData.currentUserId;
-            // --- ИСПРАВЛЕНА ЛОГИКА: используем правильное поле userId и полную проверку ---
-            const myTasks = allTasks.filter(task => 
-                task.userId == currentUserId || 
-                (task.members && task.members.some(member => member.userId == currentUserId))
-            );
-            render.renderTasksView(myTasks, store.getAllStatuses(), true);
-        } else { // 'view-btn-projects'
-            render.renderProjects(appData.projects, appData.userName, appData.userRole, {});
-        }
-    });
+        rerenderApp();
+    }
+});
 
     // --- ЛОГИКА DRAG AND DROP ---
     let draggedElement = null;
@@ -224,6 +213,49 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
+    function rerenderApp() {
+    const appData = store.getAppData();
+    const activeFilters = store.getActiveStageFilters();
+    const activeFiltersSet = new Set(activeFilters);
+
+    const activeModeBtn = document.querySelector('.view-modes .view-btn.active');
+    if (!activeModeBtn) return;
+
+    let baseTasks = [];
+    if (activeModeBtn.id === 'view-btn-my-tasks') {
+        const allTasks = appData.projects.flatMap(p => p.tasks);
+        const currentUserId = appData.currentUserId;
+        baseTasks = allTasks.filter(task => 
+            task.userId == currentUserId || 
+            (task.members && task.members.some(member => member.userId == currentUserId))
+        );
+    } else {
+        baseTasks = appData.projects.flatMap(p => p.tasks);
+    }
+
+    const filteredTasks = activeFilters.length > 0
+        ? baseTasks.filter(task => activeFiltersSet.has(String(task.stageId)))
+        : baseTasks;
+
+    if (activeModeBtn.id === 'view-btn-projects') {
+        const filteredProjects = JSON.parse(JSON.stringify(appData.projects));
+        const filteredTasksSet = new Set(filteredTasks.map(t => t.taskId));
+        filteredProjects.forEach(p => {
+            p.tasks = p.tasks.filter(t => filteredTasksSet.has(t.taskId));
+        });
+        render.renderProjects(filteredProjects, appData.userName, appData.userRole, {});
+    } else {
+        render.renderTasksView(filteredTasks, store.getAllStatuses(), activeModeBtn.id === 'view-btn-my-tasks');
+    }
+
+    const filterBtn = document.getElementById('view-btn-stages-filter');
+    if (activeFilters.length > 0) {
+        filterBtn.classList.add('filtered');
+    } else {
+        filterBtn.classList.remove('filtered');
+    }
+}
+
     async function startApp() {
         const success = await auth.initializeApp();
         if (success) {
@@ -240,6 +272,8 @@ document.addEventListener('DOMContentLoaded', () => {
             if (allowedRolesForMyTasks.includes(userRole)) {
                 document.getElementById('view-btn-my-tasks').classList.remove('hidden');
             }
+            store.selectAllStagesByDefault(); // Выбираем все этапы по умолчанию
+            rerenderApp(); // Сразу отрисовываем контент с учетом фильтров
         }
     }
 

@@ -8,6 +8,7 @@ let _allProjects = [];
 let _allUsers = [];
 let _allStatuses = [];
 let stageFilters = {};
+let activeStageFilters = new Set();
 
 // Приватные переменные для фоновой загрузки
 let _allProjectMembers = [];
@@ -52,6 +53,15 @@ export function setAppData(data) {
     _allProjects = data.allProjects || [];
     _allUsers = data.allUsers || [];
     _allStatuses = data.allStatuses || [];
+}
+
+/**
+ * Устанавливает все доступные этапы как активные по умолчанию.
+ */
+export function selectAllStagesByDefault() {
+    if (!_appData.allStages) return;
+    const allStageIds = _appData.allStages.map(stage => String(stage.stageId));
+    activeStageFilters = new Set(allStageIds);
 }
 
 /**
@@ -108,3 +118,15 @@ export const getStageNameById = (stageId) => {
 };
 
 // --- КОНЕЦ ЗАМЕНЫ ФАЙЛА ---
+
+export function getActiveStageFilters() {
+    return Array.from(activeStageFilters);
+}
+
+export function updateStageFilters(stageId, isSelected) {
+    if (isSelected) {
+        activeStageFilters.add(String(stageId));
+    } else {
+        activeStageFilters.delete(String(stageId));
+    }
+}

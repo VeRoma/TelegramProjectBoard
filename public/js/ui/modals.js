@@ -12,6 +12,9 @@ const addTaskModal = document.getElementById('add-task-modal');
 const stageModal = document.getElementById('stage-modal');
 const manageMembersModal = document.getElementById('manage-members-modal');
 const manageStagesModal = document.getElementById('manage-stages-modal');
+const stagesFilterModal = document.getElementById('stages-filter-modal');
+
+const tg = window.Telegram.WebApp;
 
 let statusModalContentLoaded = false;
 
@@ -172,7 +175,7 @@ export function openProjectModal(activeTaskDetailsElement, allProjects) {
 // --- ИСПРАВЛЕННАЯ ФУНКЦИЯ 3 ---
 export function openAddTaskModal(allProjects, allUsers, userRole, userName) {
     document.body.classList.add('overflow-hidden');
-    const tg = window.Telegram.WebApp;
+    
     const projectsOptions = allProjects.map(p => `<option value="${p.projectId}">${p.projectName}</option>`).join('');
     
     const allStatuses = store.getAllStatuses();
@@ -303,127 +306,214 @@ export function closeAddTaskModal() {
     uiUtils.updateFabButtonUI(false, handlers.handleSaveActiveTask, handlers.handleShowAddTaskModal);
 }
 
-export function openManageMembersModal(projectName, allUsers, currentMemberIds) {
-    const listContainer = document.getElementById('members-modal-list');
-    const projectNameEl = document.getElementById('members-modal-project-name');
-    projectNameEl.textContent = projectName;
-    allUsers.sort((a, b) => a.name.localeCompare(b.name));
-
-    let userHtml = '';
-    allUsers.forEach(user => {
-        // --- НАЧАЛО ИЗМЕНЕНИЙ ---
-        const isAdminOrOwner = user.role === 'admin' || user.role === 'owner';
-        
-        // Администратор всегда выбран. Для остальных проверяем, есть ли они в списке участников.
-        const isChecked = isAdminOrOwner || currentMemberIds.includes(user.userId);
-        
-        // Администратора нельзя убрать.
-        const isDisabled = isAdminOrOwner;
-        
-        // Добавляем подсказку для заблокированных чекбоксов
-        const titleHint = isDisabled ? 'title="Администраторы всегда являются участниками проекта"' : '';
-        const disabledClass = isDisabled ? 'opacity-70 cursor-not-allowed' : 'cursor-pointer';
-
-        userHtml += `
-            <label class="flex items-center p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 ${disabledClass}" ${titleHint}>
-                <input type="checkbox" class="member-checkbox h-5 w-5 rounded mr-3" value="${user.userId}" ${isChecked ? 'checked' : ''} ${isDisabled ? 'disabled' : ''}>
-                <span class="text-lg">${user.name} ${isDisabled ? ' (Админ)' : ''}</span>
-            </label>
-        `;
-        // --- КОНЕЦ ИЗМЕНЕНИЙ ---
-    });
+function setupSelectAllCheckbox(modal, listContainerSelector, onUpdate) {
+    const header = modal.querySelector('.modal-header');
+    const selectAllCheckbox = header.querySelector('.select-all-checkbox');
+    const listContainer = modal.querySelector(listContainerSelector);
+    if (!selectAllCheckbox || !listContainer) return;
     
-    listContainer.innerHTML = userHtml;
-    manageMembersModal.classList.add('active');
+    const allCheckboxes = Array.from(listContainer.querySelectorAll('input[type="checkbox"]:not(:disabled)'));
+
+    function updateSelectAllState() {
+        const checkedCount = listContainer.querySelectorAll('input[type="checkbox"]:checked:not(:disabled)').length;
+        const totalCount = allCheckboxes.length;
+        
+        if (totalCount === 0) {
+            selectAllCheckbox.checked = false;
+            selectAllCheckbox.indeterminate = false;
+            selectAllCheckbox.disabled = true;
+            return;
+        }
+
+        selectAllCheckbox.disabled = false;
+        if (checkedCount === 0) {
+            selectAllCheckbox.checked = false;
+            selectAllCheckbox.indeterminate = false;
+        } else if (checkedCount === totalCount) {
+            selectAllCheckbox.checked = true;
+            selectAllCheckbox.indeterminate = false;
+        } else {
+            selectAllCheckbox.checked = false;
+            selectAllCheckbox.indeterminate = true;
+        }
+    }
+
+    const onSelectAllClick = () => {
+        allCheckboxes.forEach(checkbox => {
+            checkbox.checked = selectAllCheckbox.checked;
+        });
+        if (onUpdate) onUpdate();
+    };
+    
+    const onListItemChange = (e) => {
+        if (e.target.type === 'checkbox') {
+            updateSelectAllState();
+            if (onUpdate) onUpdate();
+        }
+    };
+
+    selectAllCheckbox.addEventListener('click', onSelectAllClick);
+    listContainer.addEventListener('change', onListItemChange);
+    
+    updateSelectAllState(); // Устанавливаем начальное состояние
+
+    // Возвращаем функцию для очистки слушателей
+    return () => {
+        selectAllCheckbox.removeEventListener('click', onSelectAllClick);
+        listContainer.removeEventListener('change', onListItemChange);
+    };
 }
 
-// --- БЕЗ ИЗМЕНЕНИЙ ---
+// --- ОБНОВЛЕННЫЕ ФУНКЦИИ МОДАЛЬНЫХ ОКОН ---
+
+export function openManageMembersModal(projectName, allUsers, currentMemberIds) {
+    const header = manageMembersModal.querySelector('.modal-header');
+    const listContainer = document.getElementById('members-modal-list');
+    
+    header.innerHTML = `
+        <h3 class="font-bold">Участники: <span class="font-normal">${projectName}</span></h3>
+        <input type="checkbox" class="select-all-checkbox" title="Выбрать всех / Снять всех">
+    `;
+
+    allUsers.sort((a, b) => a.name.localeCompare(b.name));
+
+    listContainer.innerHTML = allUsers.map(user => {
+        const isAdminOrOwner = user.role === 'admin' || user.role === 'owner';
+        const isChecked = isAdminOrOwner || currentMemberIds.includes(user.userId);
+        const isDisabled = isAdminOrOwner;
+        const titleHint = isDisabled ? 'title="Администраторы всегда являются участниками проекта"' : '';
+        
+        return `
+            <label class="list-item-selectable ${isDisabled ? 'opacity-70 cursor-not-allowed' : ''}" ${titleHint}>
+                <span>${user.name} ${isDisabled ? '<span class="text-xs" style="color: var(--tg-theme-hint-color);">(Админ)</span>' : ''}</span>
+                <input type="checkbox" class="member-checkbox" value="${user.userId}" ${isChecked ? 'checked' : ''} ${isDisabled ? 'disabled' : ''}>
+            </label>
+        `;
+    }).join('');
+    
+    manageMembersModal.classList.add('active');
+    const cleanup = setupSelectAllCheckbox(manageMembersModal, '#members-modal-list');
+    
+    const closeModal = () => {
+        manageMembersModal.classList.remove('active');
+        tg.BackButton.hide();
+        tg.BackButton.offClick(closeModal);
+        cleanup(); // Очищаем слушатели
+    };
+
+    tg.BackButton.onClick(closeModal);
+    tg.BackButton.show();
+}
+
 export function openManageStagesModal(projectName, allStages, activeStageIds) {
+    const header = manageStagesModal.querySelector('.modal-header');
     const listContainer = document.getElementById('stages-modal-list');
-    const projectNameEl = document.getElementById('stages-modal-project-name');
-    projectNameEl.textContent = projectName;
+    
+    header.innerHTML = `
+        <h3 class="font-bold">Этапы: <span class="font-normal">${projectName}</span></h3>
+        <input type="checkbox" class="select-all-checkbox" title="Выбрать все / Снять все">
+    `;
     
     const activeStageIdsSet = new Set(activeStageIds.map(String));
 
-    let stageHtml = '';
-    allStages.forEach(stage => {
+    listContainer.innerHTML = allStages.map(stage => {
         const isChecked = activeStageIdsSet.has(String(stage.stageId));
-        stageHtml += `
-            <label class="flex items-center p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 cursor-pointer">
-                <input type="checkbox" class="stage-checkbox h-5 w-5 rounded mr-3" value="${stage.stageId}" ${isChecked ? 'checked' : ''}>
-                <span class="text-lg">${stage.name}</span>
+        return `
+            <label class="list-item-selectable">
+                <span>${stage.name}</span>
+                <input type="checkbox" class="stage-checkbox" value="${stage.stageId}" ${isChecked ? 'checked' : ''}>
             </label>
         `;
-    });
+    }).join('');
     
-    listContainer.innerHTML = stageHtml;
     manageStagesModal.classList.add('active');
+    const cleanup = setupSelectAllCheckbox(manageStagesModal, '#stages-modal-list');
+
+    const closeModal = () => {
+        manageStagesModal.classList.remove('active');
+        tg.BackButton.hide();
+        tg.BackButton.offClick(closeModal);
+        cleanup(); // Очищаем слушатели
+    };
+
+    tg.BackButton.onClick(closeModal);
+    tg.BackButton.show();
 }
 
-// --- БЕЗ ИЗМЕНЕНИЙ ---
+export function openStagesFilterModal(onFilterChange) {
+    const allStages = store.getAppData().allStages || [];
+    const activeFilters = new Set(store.getActiveStageFilters());
+
+    stagesFilterModal.innerHTML = `
+        <div class="modal-content modal-content-compact">
+            <div class="modal-header">
+                <h3 class="font-bold">Фильтр по этапам</h3>
+                <input type="checkbox" class="select-all-checkbox" title="Выбрать все / Снять все">
+            </div>
+            <div class="modal-body p-2">
+                ${allStages.map(stage => `
+                    <label class="list-item-selectable">
+                        <span>${stage.name}</span>
+                        <input type="checkbox" data-stage-id="${stage.stageId}" ${activeFilters.has(String(stage.stageId)) ? 'checked' : ''}>
+                    </label>
+                `).join('')}
+            </div>
+        </div>`;
+    
+    stagesFilterModal.classList.add('active');
+    
+    const handleChange = () => {
+        const selectedIds = Array.from(stagesFilterModal.querySelectorAll('input[type="checkbox"]:checked'))
+            .map(cb => cb.dataset.stageId);
+        
+        allStages.forEach(stage => store.updateStageFilters(stage.stageId, false));
+        selectedIds.forEach(id => store.updateStageFilters(id, true));
+        onFilterChange();
+    };
+    
+    const cleanup = setupSelectAllCheckbox(stagesFilterModal, '.modal-body', handleChange);
+
+    const closeModal = () => {
+        stagesFilterModal.classList.remove('active');
+        tg.BackButton.hide();
+        tg.BackButton.offClick(closeModal);
+        cleanup(); // Очищаем слушатели
+    };
+
+    tg.BackButton.onClick(closeModal);
+    tg.BackButton.show();
+}
+
+// --- ОБНОВЛЕННАЯ ФУНКЦИЯ `setupModals` ---
 export function setupModals(onStatusChange) {
-    const modals = [statusModal, userModal, projectModal, addTaskModal, manageMembersModal, manageStagesModal];
-    modals.forEach(modal => {
+    const allModals = document.querySelectorAll('.modal, .modal-overlay');
+    
+    allModals.forEach(modal => {
         if (!modal) return;
         
-        const closeBtn = modal.querySelector('.modal-close-btn');
-
         const closeModal = () => {
              if (modal.id === 'add-task-modal') {
                  closeAddTaskModal();
              } else {
                  modal.classList.remove('active');
                  document.body.classList.remove('overflow-hidden');
+                 // Если кнопка Назад была показана для этого окна, прячем
+                 if(tg.BackButton.isVisible) {
+                    tg.BackButton.hide();
+                 }
              }
         };
 
-        if (closeBtn) {
-            closeBtn.addEventListener('click', closeModal);
-        }
-
         modal.addEventListener('click', (e) => {
+            // Закрытие по клику на фон
             if (e.target === modal) {
                 closeModal();
             }
 
+            // Обработка клика по статусу
             if (modal.id === 'status-modal' && e.target.closest('.status-option')) {
                 const selectedOption = e.target.closest('.status-option');
-                const taskId = modal.dataset.currentTaskId;
-                const newStatus = selectedOption.dataset.statusValue;
-                onStatusChange(taskId, newStatus);
-                closeModal();
-            }
-            
-            if (e.target.closest('.modal-select-btn') && modal.id !== 'add-task-modal') {
-                const targetElement = document.getElementById(modal.dataset.targetElementId);
-                if (!targetElement) return;
-
-                if (modal.id === 'user-modal') {
-                    const checkedCheckboxes = [...modal.querySelectorAll('.user-checkbox:checked')];
-                    
-                    if (checkedCheckboxes.length === 0) {
-                        uiUtils.showMessage('Задача должна иметь хотя бы одного ответственного (Куратора).', 'error');
-                        return;
-                    }
-
-                    const memberIds = checkedCheckboxes.map(cb => cb.value);
-                    const curatorId = memberIds[0];
-                    handlers.handleUpdateTaskMembers(targetElement.id, curatorId, memberIds);
-                } else if (modal.id === 'project-modal') {
-                    const selected = modal.querySelector('input[name="project"]:checked');
-                    if (selected) targetElement.querySelector('.task-project-view').textContent = selected.value;
-                } else if (modal.id === 'stage-modal') {
-                    const selected = modal.querySelector('input[name="stage"]:checked');
-                    if (selected) {
-                        const newStageId = selected.value;
-                        const newStageName = store.getStageNameById(newStageId);
-                        targetElement.querySelector('.task-stage-view').textContent = newStageName;
-                        
-                        const taskData = JSON.parse(targetElement.dataset.task);
-                        taskData.stageId = newStageId;
-                        targetElement.dataset.task = JSON.stringify(taskData);
-                    }
-                }
+                onStatusChange(modal.dataset.currentTaskId, selectedOption.dataset.statusValue);
                 closeModal();
             }
         });
