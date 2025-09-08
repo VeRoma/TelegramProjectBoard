@@ -13,8 +13,16 @@ body {
     background-color: var(--tg-theme-secondary-bg-color, #f3f3f3);
     border-bottom: 1px solid var(--tg-theme-hint-color, #e0e0e0);
     transition: all 0.6s ease-out;
-    max-height: 100px;
-    overflow: hidden;
+
+    /* --- ДОБАВЛЕНО: Прилепляем хедер к верху --- */
+    position: sticky;
+    top: 0;
+    z-index: 40;
+    /* Должен быть ниже модальных окон (у которых 50) */
+
+    /* --- УДАЛЕНО: Больше не ограничиваем высоту --- */
+    /* max-height: 100px; */
+    /* overflow: hidden; */
 }
 
 .header #greeting-text {
@@ -34,17 +42,23 @@ body {
 .card {
     background-color: var(--tg-theme-secondary-bg-color, #f8f8f8);
     transition: transform 0.2s ease-out;
+    /* --- ДОБАВЛЕНО: Задаем ширину почти 100% и центрируем --- */
+    width: 99%;
+    margin: 0 auto;
+}
+
+.card:hover,
+.task-container:hover {
+    /* --- ИЗМЕНЕНО: Уменьшаем эффект масштабирования --- */
+    transform: scale(1.01);
+    z-index: 10;
 }
 
 .task-container {
     transition: transform 0.2s ease-out;
 }
 
-.card:hover,
-.task-container:hover {
-    transform: scale(1.02);
-    z-index: 10;
-}
+
 
 .collapsible-content {
     max-height: 0;
@@ -387,4 +401,90 @@ body[style*="--tg-color-scheme: dark"] .task-status-checker {
 .modal-overlay.active {
     display: flex;
     /* <-- Этот стиль показывает окно, когда JS добавляет класс .active */
+}
+
+/* --- Стили для тулбара видов --- */
+.view-btn {
+    display: flex;
+    align-items: center;
+    padding: 6px 12px;
+    border-radius: 8px;
+    background-color: transparent;
+    color: var(--tg-theme-hint-color);
+    border: 1px solid transparent;
+    transition: all 0.2s ease-in-out;
+    font-size: 0.9rem;
+    font-weight: 500;
+}
+
+.view-btn:hover {
+    background-color: var(--tg-theme-secondary-bg-color);
+}
+
+.view-btn.active {
+    color: var(--tg-theme-button-color);
+    background-color: var(--tg-theme-secondary-bg-color);
+    border-color: var(--tg-theme-button-color);
+    font-weight: 700;
+}
+
+/* --- ДОБАВЛЕНО: Разделитель между шапкой проекта и списком задач --- */
+.project-content {
+    border-top: 1px solid var(--tg-theme-hint-color, #e0e0e0);
+}
+
+/* --- ДОБАВЛЕНО: Разделители между задачами внутри проекта --- */
+.tasks-list .task-container:not(:first-child) {
+    border-top: 1px solid var(--tg-theme-hint-color, #e0e0e0);
+}
+
+/* --- ДОБАВЛЕНО: Отступы для заголовка задачи, т.к. мы убрали карточку --- */
+.task-container .task-header {
+    padding-left: 16px;
+    padding-right: 16px;
+}
+
+/* --- ДОБАВЛЕНО: Отключаем масштабирование для раскрытых карточек --- */
+.card:has(.collapsible-content.expanded):hover,
+.task-container:has(.collapsible-content.expanded):hover {
+    transform: none;
+    /* Убираем трансформацию */
+    cursor: default;
+    /* Меняем курсор, т.к. основное действие уже выполнено */
+}
+
+/* --- ДОБАВЛЕНО: Защита иконок в шапке проекта от длинного текста --- */
+
+/* 1. Делаем шапку гибким контейнером */
+.project-header {
+    display: flex;
+    justify-content: space-between;
+    /* Размещаем элементы по краям */
+    align-items: center;
+    /* Выравниваем по центру по вертикали */
+    gap: 16px;
+    /* Добавляем отступ между названием и иконками */
+}
+
+/* 2. Позволяем блоку с названием расти, но не даем ему толкать иконки */
+.project-title-container {
+    flex-grow: 1;
+    /* Блок будет занимать все доступное пространство */
+    min-width: 0;
+    /* Технический трюк, чтобы длинный текст мог усекаться */
+}
+
+/* 3. Делаем блок с иконками фиксированным и не сжимаемым */
+.project-actions {
+    flex-shrink: 0;
+    /* Запрещаем блоку сжиматься */
+    display: flex;
+    /* Выравниваем иконки внутри блока */
+    align-items: center;
+}
+
+/* 4. Убираем абсолютное позиционирование с самих кнопок, т.к. оно больше не нужно */
+.project-header .manage-members-btn,
+.project-header .manage-stages-btn {
+    position: static;
 }

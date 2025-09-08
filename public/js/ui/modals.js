@@ -303,7 +303,6 @@ export function closeAddTaskModal() {
     uiUtils.updateFabButtonUI(false, handlers.handleSaveActiveTask, handlers.handleShowAddTaskModal);
 }
 
-// --- БЕЗ ИЗМЕНЕНИЙ ---
 export function openManageMembersModal(projectName, allUsers, currentMemberIds) {
     const listContainer = document.getElementById('members-modal-list');
     const projectNameEl = document.getElementById('members-modal-project-name');
@@ -312,13 +311,26 @@ export function openManageMembersModal(projectName, allUsers, currentMemberIds) 
 
     let userHtml = '';
     allUsers.forEach(user => {
-        const isChecked = currentMemberIds.includes(user.userId);
+        // --- НАЧАЛО ИЗМЕНЕНИЙ ---
+        const isAdminOrOwner = user.role === 'admin' || user.role === 'owner';
+        
+        // Администратор всегда выбран. Для остальных проверяем, есть ли они в списке участников.
+        const isChecked = isAdminOrOwner || currentMemberIds.includes(user.userId);
+        
+        // Администратора нельзя убрать.
+        const isDisabled = isAdminOrOwner;
+        
+        // Добавляем подсказку для заблокированных чекбоксов
+        const titleHint = isDisabled ? 'title="Администраторы всегда являются участниками проекта"' : '';
+        const disabledClass = isDisabled ? 'opacity-70 cursor-not-allowed' : 'cursor-pointer';
+
         userHtml += `
-            <label class="flex items-center p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 cursor-pointer">
-                <input type="checkbox" class="member-checkbox h-5 w-5 rounded mr-3" value="${user.userId}" ${isChecked ? 'checked' : ''}>
-                <span class="text-lg">${user.name}</span>
+            <label class="flex items-center p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 ${disabledClass}" ${titleHint}>
+                <input type="checkbox" class="member-checkbox h-5 w-5 rounded mr-3" value="${user.userId}" ${isChecked ? 'checked' : ''} ${isDisabled ? 'disabled' : ''}>
+                <span class="text-lg">${user.name} ${isDisabled ? ' (Админ)' : ''}</span>
             </label>
         `;
+        // --- КОНЕЦ ИЗМЕНЕНИЙ ---
     });
     
     listContainer.innerHTML = userHtml;
