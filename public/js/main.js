@@ -124,7 +124,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 return;
             }
 
-            // CORRECTED: Looking for '.project-content'
             const projectBody = projectElement.querySelector('.project-content');
             const projectsContainer = document.getElementById('projects-container');
 
@@ -134,8 +133,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             const wasOpen = projectBody.classList.contains('expanded');
-
-            // CORRECTED: Looking for '.project-content'
+            
             const anyOtherOpenBody = projectsContainer.querySelector('.project-card .project-content.expanded');
             if (anyOtherOpenBody && anyOtherOpenBody !== projectBody) {
                 console.log('[MAIN.JS LOG] Closing previously open project.');
@@ -147,7 +145,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
             if (!wasOpen && projectBody.classList.contains('expanded')) {
                 console.log('[MAIN.JS LOG] Moving project to top.');
-                // projectsContainer.prepend(projectElement);  //  Move to top
                 projectElement.scrollIntoView({ behavior: 'smooth', block: 'start' });
             }
             return;
@@ -159,38 +156,38 @@ document.addEventListener('DOMContentLoaded', () => {
             event.stopPropagation();
             const taskCard = deleteBtn.closest('[data-task-id]');
             const taskId = taskCard.dataset.taskId;
-            handlers.handleDeleteTask(taskId); // Вызываем наш новый хендлер
+            handlers.handleDeleteTask(taskId);
             return;
-        }   
+        } 
+    });
+
+    // --- ИСПРАВЛЕНИЕ: Единый обработчик для панели инструментов, вынесенный на правильный уровень ---
+    const viewToolbar = document.getElementById('view-toolbar');
+    viewToolbar.addEventListener('click', (event) => {
+        const targetButton = event.target.closest('.view-btn');
+        if (!targetButton) return;
+
+        viewToolbar.querySelectorAll('.view-btn').forEach(btn => btn.classList.remove('active'));
+        targetButton.classList.add('active');
+
+        const appData = store.getAppData();
         
-        const viewToolbar = document.getElementById('view-toolbar');
-        viewToolbar.addEventListener('click', (event) => {
-            const targetButton = event.target.closest('.view-btn');
-            if (!targetButton) return;
+        if (targetButton.id === 'view-btn-tasks') {
+            const allTasks = appData.projects.flatMap(p => p.tasks);
+            render.renderTasksView(allTasks, store.getAllStatuses());
 
-            viewToolbar.querySelectorAll('.view-btn').forEach(btn => btn.classList.remove('active'));
-            targetButton.classList.add('active');
+        } else if (targetButton.id === 'view-btn-my-tasks') {
+            const allTasks = appData.projects.flatMap(p => p.tasks);
+            const currentUserId = appData.currentUserId;
+            const myTasks = allTasks.filter(task => 
+                task.curatorId == currentUserId || 
+                (task.members && task.members.some(member => member.userId == currentUserId))
+            );
+            render.renderTasksView(myTasks, store.getAllStatuses(), true);
 
-            const appData = store.getAppData();
-            
-            if (targetButton.id === 'view-btn-tasks') {
-                const allTasks = appData.projects.flatMap(p => p.tasks);
-                render.renderTasksView(allTasks, store.getAllStatuses());
-
-            } else if (targetButton.id === 'view-btn-my-tasks') {
-                const allTasks = appData.projects.flatMap(p => p.tasks);
-                const currentUserId = appData.currentUserId;
-                const myTasks = allTasks.filter(task => 
-                    task.curatorId == currentUserId || 
-                    (task.members && task.members.some(member => member.userId == currentUserId))
-                );
-                render.renderTasksView(myTasks, store.getAllStatuses(), true);
-
-            } else { // 'view-btn-projects'
-                render.renderProjects(appData.projects, appData.userName, appData.userRole, {});
-            }
-        });
-        
+        } else { // 'view-btn-projects'
+            render.renderProjects(appData.projects, appData.userName, appData.userRole, {});
+        }
     });
 
     let draggedElement = null;
@@ -286,27 +283,6 @@ document.addEventListener('DOMContentLoaded', () => {
         uiUtils.showFab();
     });
 
-    const viewToolbar = document.getElementById('view-toolbar');
-    viewToolbar.addEventListener('click', (event) => {
-        const targetButton = event.target.closest('.view-btn');
-        if (!targetButton) return;
-
-        // Снимаем класс 'active' со всех кнопок и добавляем на нажатую
-        viewToolbar.querySelectorAll('.view-btn').forEach(btn => btn.classList.remove('active'));
-        targetButton.classList.add('active');
-
-        const appData = store.getAppData();
-        
-        if (targetButton.id === 'view-btn-tasks') {
-            // Вид "Задачи": собираем все задачи в один массив
-            const allTasks = appData.projects.flatMap(p => p.tasks);
-            render.renderTasksView(allTasks, store.getAllStatuses());
-        } else {
-            // Вид "Проекты" (по умолчанию)
-            render.renderProjects(appData.projects, appData.userName, appData.userRole, {});
-        }
-    });
-
     document.getElementById('register-btn').addEventListener('click', async () => {
         const nameInput = document.getElementById('name-input');
         const name = nameInput.value.trim();
@@ -333,8 +309,6 @@ document.addEventListener('DOMContentLoaded', () => {
             modals.setupModals(handlers.handleStatusUpdate);
             uiUtils.updateFabButtonUI(false, handlers.handleShowAddTaskModal, handlers.handleShowAddTaskModal);
 
-            // --- ДОБАВЛЕННАЯ СТРОКА ---
-            // Прячем приветствие и показываем панель инструментов
             document.getElementById('greeting-container').style.display = 'none';
             const toolbar = document.getElementById('view-toolbar');
             toolbar.classList.remove('hidden');
@@ -349,5 +323,4 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     startApp();
-
 });
